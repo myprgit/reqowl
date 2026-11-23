@@ -5,7 +5,7 @@ use std::fs;
 use reqowl_core::error::Error;
 use reqowl_core::page;
 use reqowl_core::session::{Session, find_block};
-use wiremock::matchers::{body_json, body_string, header, method, path, query_param};
+use wiremock::matchers::{body_json, body_string, body_string_contains, header, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 const PAGE: &str = r#"---
@@ -145,4 +145,67 @@ async fn redirects_and_errors() {
         Session::open(&page_path, &page, Some("prod")),
         Err(Error::UnknownEnv(_))
     ));
+}
+
+#[tokio::test]
+async fn oauth2_profile_from_env_files() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/oauth/token"))
+        .and(body_string_contains("grant_type=client_credentials"))
+        .and(body_string_contains("client_id=cli"))
+        .and(body_string_contains("client_secret=from-local"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(serde_json::json!({"access_token": "oa-1", "expires_in": 3600})),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/me"))
+        .and(header("authorization", "Bearer oa-1"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(2)
+        .mount(&server)
+        .await;
+
+    // Dotted keys must be quoted in TOML; unquoted they would be tables.
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(root.join("reqowl.toml"), "default_env = \"dev\"\n").unwrap();
+    fs::create_dir_all(root.join("env")).unwrap();
+    fs::write(
+        root.join("env/dev.toml"),
+        format!(
+            "base = \"{}\"\n\"api.grant\" = \"client_credentials\"\n\
+             \"api.token_url\" = \"{{{{base}}}}/oauth/token\"\n\"api.client_id\" = \"cli\"\n",
+            server.uri()
+        ),
+    )
+    .unwrap();
+    fs::write(
+        root.join("env/dev.local.toml"),
+        "\"api.client_secret\" = \"from-local\"\n",
+    )
+    .unwrap();
+    let text = "```http\n# @auth oauth2 api\nGET {{base}}/me\n```\n\n```http\n# @auth oauth2 api\nGET {{base}}/me\n```\n\n\
+```http\n# @auth oauth2 missing\nGET {{base}}/me\n```\n";
+    let page_path = root.join("OAuth.md");
+    fs::write(&page_path, text).unwrap();
+    let page = page::parse(text);
+
+    let mut s = Session::open(&page_path, &page, None).unwrap();
+    // The desktop app runs sessions on a multi-threaded runtime.
+    fn assert_send<T: Send>(_: &T) {}
+    assert_send(&s.run(&page.blocks[0]));
+    for b in &page.blocks[..2] {
+        let out = s.run(b).await.unwrap();
+        assert_eq!(out.response.status, 200);
+        assert_eq!(out.request.header("authorization"), Some("Bearer oa-1"));
+    }
+    let err = s.run(&page.blocks[2]).await.err().unwrap();
+    assert!(
+        matches!(err, Error::OAuth(_)) && err.to_string().contains("missing.grant"),
+        "{err}"
+    );
 }
