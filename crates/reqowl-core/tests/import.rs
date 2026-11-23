@@ -394,7 +394,7 @@ fn curl_command() {
     assert_eq!(r.body.as_deref(), Some("{\"name\": \"lamp\"}"));
 
     // Back out as curl and in again.
-    let again = import::curl::parse(&import::to_curl(r)).unwrap();
+    let again = import::curl::parse(&reqowl_core::export::to_curl(r)).unwrap();
     assert_eq!(&again, r);
 }
 

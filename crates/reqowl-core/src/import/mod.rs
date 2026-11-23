@@ -138,8 +138,9 @@ const GITIGNORE_LINES: &[&str] = &[".reqowl/", "env/*.local.toml"];
 
 /// Writes the workspace into `dir` (created if missing): `reqowl.toml`,
 /// `env/*.toml`, pages, `.order` files and a `.gitignore`. Refuses a
-/// directory that already holds a workspace. Existing files in `dir` are
-/// never overwritten; colliding page names get a ` (2)` suffix.
+/// directory that already holds a workspace. Pages never overwrite existing
+/// files (colliding names get a ` (2)` suffix), but `.order` files and
+/// same-named `env/*.toml` files are replaced.
 pub fn write_workspace(ws: &ImportedWorkspace, dir: &Path) -> Result<()> {
     let config_path = dir.join(CONFIG_FILE);
     if config_path.exists() {
@@ -653,27 +654,22 @@ pub(crate) fn header(name: &str, value: impl Into<String>) -> Header {
     }
 }
 
-/// Replaces `:name` path segments with a value (or `{{name}}` when empty).
+/// Replaces `:name` path segments with the given value, or with `{{name}}`
+/// when the value is empty or missing (so an unset one fails loudly instead
+/// of being sent as a literal `:name`).
 pub(crate) fn fill_path_params(url: &str, params: &[(String, String)]) -> String {
-    if params.is_empty() {
-        return url.to_string();
-    }
     let split = url.find(['?', '#']).unwrap_or(url.len());
     let (path, tail) = url.split_at(split);
     let filled: Vec<String> = path
         .split('/')
-        .map(|seg| {
-            if let Some(name) = seg.strip_prefix(':')
-                && let Some((_, v)) = params.iter().find(|(k, _)| k == name)
-            {
-                if v.is_empty() {
-                    format!("{{{{{name}}}}}")
-                } else {
-                    v.clone()
+        .map(|seg| match seg.strip_prefix(':') {
+            Some(name) if !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') => {
+                match params.iter().find(|(k, _)| k == name) {
+                    Some((_, v)) if !v.is_empty() => v.clone(),
+                    _ => format!("{{{{{name}}}}}"),
                 }
-            } else {
-                seg.to_string()
             }
+            _ => seg.to_string(),
         })
         .collect();
     format!("{}{tail}", filled.join("/"))
@@ -722,6 +718,10 @@ mod tests {
     fn path_params() {
         let p = vec![("id".to_string(), "7".to_string()), ("v".to_string(), String::new())];
         assert_eq!(fill_path_params("{{b}}/u/:id/:v?x=:id", &p), "{{b}}/u/7/{{v}}?x=:id");
+        assert_eq!(
+            fill_path_params("http://h:8080/a/:code/b", &[]),
+            "http://h:8080/a/{{code}}/b"
+        );
     }
 
     #[test]

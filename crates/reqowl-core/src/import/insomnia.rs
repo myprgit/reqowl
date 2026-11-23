@@ -65,7 +65,16 @@ pub fn parse_v5(v: &Value) -> Result<ImportedWorkspace> {
         ..Default::default()
     };
     if let Some(envs) = v.get("environments").filter(|e| e.is_object()) {
-        add_base_env(&mut ws, envs);
+        if str_field(v, "type").starts_with("environment.") {
+            // A standalone environment file: its base environment is an environment too.
+            let mut base = envs.clone();
+            if str_field(&base, "name").trim().is_empty() {
+                base["name"] = Value::String(ws.name.clone());
+            }
+            add_sub_env(&mut ws, &base);
+        } else {
+            add_base_env(&mut ws, envs);
+        }
         for sub in array_field(envs, "subEnvironments") {
             add_sub_env(&mut ws, sub);
         }
@@ -681,6 +690,17 @@ fn simple_var(inner: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn standalone_environment_file() {
+        let y = "type: environment.insomnia.rest/5.0\nname: Dev Environment\nenvironments:\n  name: Dev\n  data:\n    base_url: http://localhost:8000\n  subEnvironments:\n    - name: Mine\n      meta:\n        id: env_1\n        isPrivate: true\n      data:\n        token: t\n";
+        let ws = parse_v5(&serde_yaml_ng::from_str(y).unwrap()).unwrap();
+        assert!(ws.vars.is_empty());
+        assert_eq!(ws.envs[0].name, "Dev");
+        assert_eq!(ws.envs[0].vars["base_url"], "http://localhost:8000");
+        assert_eq!(ws.envs[1].secrets["token"], "t");
+        assert_eq!(ws.default_env.as_deref(), Some("Dev"));
+    }
 
     #[test]
     fn templates() {
