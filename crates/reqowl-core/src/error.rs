@@ -27,6 +27,9 @@ pub enum Error {
     #[error("request failed: {0}")]
     Http(String),
 
+    #[error("import: {0}")]
+    Import(String),
+
     #[error("{0} requests are not supported yet")]
     Unsupported(&'static str),
 }

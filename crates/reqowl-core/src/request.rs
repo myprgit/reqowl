@@ -304,6 +304,64 @@ fn parse_directive(d: &str, out: &mut Directives) -> std::result::Result<(), Str
     Ok(())
 }
 
+/// Renders a spec as block content (what goes between the fences): directives,
+/// the request line, headers, a blank line and the body. [`parse`] reads it back
+/// into an equal spec, as long as the spec is already in the shape `parse`
+/// produces (no trailing blank body lines, trimmed header values, an empty body
+/// as `None`).
+pub fn to_block_text(spec: &RequestSpec) -> String {
+    use std::fmt::Write;
+
+    let mut out = String::new();
+    let d = &spec.directives;
+    if let Some(name) = &d.name {
+        let _ = writeln!(out, "# @name {name}");
+    }
+    if let Some(auth) = &d.auth {
+        let _ = writeln!(out, "# @auth {auth}");
+    }
+    if let Some(t) = d.timeout {
+        let _ = writeln!(out, "# @timeout {}", format_duration(t));
+    }
+    if d.no_redirect {
+        out.push_str("# @no-redirect\n");
+    }
+    if d.insecure {
+        out.push_str("# @insecure\n");
+    }
+    for (k, v) in &d.other {
+        if v.is_empty() {
+            let _ = writeln!(out, "# @{k}");
+        } else {
+            let _ = writeln!(out, "# @{k} {v}");
+        }
+    }
+    let verb = match spec.kind {
+        Kind::Http => spec.method.as_str(),
+        Kind::GraphQl => "GRAPHQL",
+        Kind::WebSocket => "WEBSOCKET",
+    };
+    let _ = writeln!(out, "{verb} {}", spec.url);
+    for h in &spec.headers {
+        let _ = writeln!(out, "{}: {}", h.name, h.value);
+    }
+    if let Some(body) = &spec.body {
+        let _ = write!(out, "\n{body}\n");
+    }
+    out
+}
+
+/// The inverse of [`parse_duration`]: `10s` for whole seconds, else milliseconds.
+pub fn format_duration(d: Duration) -> String {
+    if d.subsec_nanos() == 0 {
+        format!("{}s", d.as_secs())
+    } else if d.as_nanos().is_multiple_of(1_000_000) {
+        format!("{}ms", d.as_millis())
+    } else {
+        format!("{}ms", d.as_secs_f64() * 1000.0)
+    }
+}
+
 /// `500ms`, `10s`, `2m`, or a bare number of seconds.
 pub fn parse_duration(s: &str) -> std::result::Result<Duration, String> {
     let bad = || format!("bad duration `{s}`, expected e.g. `500ms`, `10s` or `2m`");
@@ -389,6 +447,71 @@ mod tests {
         assert_eq!(parse_duration("2m").unwrap(), Duration::from_secs(120));
         assert_eq!(parse_duration("3").unwrap(), Duration::from_secs(3));
         assert!(parse_duration("3h").is_err());
+    }
+
+    #[test]
+    fn block_text_round_trips() {
+        let mut other = BTreeMap::new();
+        other.insert("note".to_string(), "keep me".to_string());
+        other.insert("flag".to_string(), String::new());
+        let specs = [
+            RequestSpec {
+                kind: Kind::Http,
+                method: "GET".into(),
+                url: "https://example.com/x?a=1&b={{b}}".into(),
+                headers: vec![],
+                body: None,
+                directives: Directives::default(),
+            },
+            RequestSpec {
+                kind: Kind::Http,
+                method: "POST".into(),
+                url: "{{base}}/login".into(),
+                headers: vec![
+                    Header {
+                        name: "Content-Type".into(),
+                        value: "application/json".into(),
+                    },
+                    Header {
+                        name: "X-Empty".into(),
+                        value: String::new(),
+                    },
+                ],
+                body: Some("\n{\n  \"u\": \"{{user}}\"\n}".into()),
+                directives: Directives {
+                    name: Some("login".into()),
+                    auth: Some("basic user:".into()),
+                    timeout: Some(Duration::from_millis(1500)),
+                    no_redirect: true,
+                    insecure: true,
+                    other,
+                },
+            },
+            RequestSpec {
+                kind: Kind::GraphQl,
+                method: "POST".into(),
+                url: "http://h/graphql".into(),
+                headers: vec![],
+                body: Some("query { me { id } }\n\n{\"a\": 1}".into()),
+                directives: Directives {
+                    auth: Some("bearer {{token}}".into()),
+                    timeout: Some(Duration::from_secs(10)),
+                    ..Default::default()
+                },
+            },
+            RequestSpec {
+                kind: Kind::WebSocket,
+                method: "GET".into(),
+                url: "ws://h/s".into(),
+                headers: vec![],
+                body: None,
+                directives: Directives::default(),
+            },
+        ];
+        for spec in specs {
+            let text = to_block_text(&spec);
+            assert_eq!(parse(&text, 1).unwrap(), spec, "{text}");
+        }
     }
 
     #[test]

@@ -1,0 +1,410 @@
+{
+	"info": {
+		"_postman_id": "8c2b6d0e-3a7f-4b1e-9d55-2f1c0a9e4b7d",
+		"name": "Shop API",
+		"description": "Endpoints for the demo shop.\n\nSet `base_url` and `token` in your environment.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "12345678"
+	},
+	"item": [
+		{
+			"name": "Auth",
+			"description": "Login and token refresh. These calls send no bearer token.",
+			"item": [
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"const body = pm.response.json();",
+									"pm.collectionVariables.set(\"token\", body.token);"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"user\": \"{{username}}\",\n    \"password\": \"{{password}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"auth",
+								"login"
+							]
+						},
+						"description": "Returns a session token."
+					},
+					"response": []
+				},
+				{
+					"name": "Refresh token",
+					"request": {
+						"auth": {
+							"type": "basic",
+							"basic": [
+								{
+									"key": "password",
+									"value": "{{client_secret}}",
+									"type": "string"
+								},
+								{
+									"key": "username",
+									"value": "{{client_id}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "grant_type",
+									"value": "refresh_token",
+									"type": "text"
+								},
+								{
+									"key": "refresh_token",
+									"value": "{{refresh_token}}",
+									"type": "text"
+								},
+								{
+									"key": "scope",
+									"value": "orders:read orders:write",
+									"type": "text"
+								},
+								{
+									"key": "debug",
+									"value": "true",
+									"type": "text",
+									"disabled": true
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/oauth/token",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"oauth",
+								"token"
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"auth": {
+				"type": "noauth"
+			}
+		},
+		{
+			"name": "Orders",
+			"item": [
+				{
+					"name": "List orders",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "X-Debug",
+								"value": "1",
+								"type": "text",
+								"disabled": true
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/orders?limit={{page_size}}&status=open",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"orders"
+							],
+							"query": [
+								{
+									"key": "limit",
+									"value": "{{page_size}}"
+								},
+								{
+									"key": "status",
+									"value": "open"
+								},
+								{
+									"key": "expand",
+									"value": "items",
+									"disabled": true
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Admin",
+					"item": [
+						{
+							"name": "Delete order",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/orders/:orderId",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"orders",
+										":orderId"
+									],
+									"variable": [
+										{
+											"key": "orderId",
+											"value": "42",
+											"description": "Order to delete"
+										}
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Upload invoice",
+							"request": {
+								"auth": {
+									"type": "inherit"
+								},
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "formdata",
+									"formdata": [
+										{
+											"key": "orderId",
+											"value": "42",
+											"type": "text"
+										},
+										{
+											"key": "note",
+											"value": "paid by card",
+											"type": "text"
+										},
+										{
+											"key": "file",
+											"type": "file",
+											"src": "/home/me/invoice-42.pdf"
+										}
+									]
+								},
+								"url": {
+									"raw": "{{base_url}}/orders/42/invoice",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"orders",
+										"42",
+										"invoice"
+									]
+								}
+							},
+							"response": []
+						}
+					],
+					"auth": {
+						"type": "apikey",
+						"apikey": [
+							{
+								"key": "value",
+								"value": "{{admin_key}}",
+								"type": "string"
+							},
+							{
+								"key": "key",
+								"value": "X-Admin-Key",
+								"type": "string"
+							},
+							{
+								"key": "in",
+								"value": "header",
+								"type": "string"
+							}
+						]
+					},
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									""
+								]
+							}
+						}
+					]
+				}
+			],
+			"variable": [
+				{
+					"key": "page_size",
+					"value": "20"
+				}
+			]
+		},
+		{
+			"name": "Search products (GraphQL)",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "graphql",
+					"graphql": {
+						"query": "query Search($q: String!, $first: Int) {\n  products(query: $q, first: $first) {\n    id\n    name\n\n    price\n  }\n}",
+						"variables": "{\n  \"q\": \"lamp\",\n  \"first\": 5\n}"
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/graphql",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"graphql"
+					]
+				},
+				"description": {
+					"content": "Full-text product search.",
+					"type": "text/markdown"
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Health check",
+			"request": "https://status.example.com/health"
+		},
+		{
+			"name": "Report: daily sales",
+			"request": {
+				"auth": {
+					"type": "apikey",
+					"apikey": [
+						{
+							"key": "in",
+							"value": "query",
+							"type": "string"
+						},
+						{
+							"key": "key",
+							"value": "api_key",
+							"type": "string"
+						},
+						{
+							"key": "value",
+							"value": "{{report_key}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/reports/daily?day={{$isoTimestamp}}&id={{$guid}}",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"reports",
+						"daily"
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{token}}",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					"pm.request.headers.add({ key: 'X-Request-Id', value: pm.variables.replaceIn('{{$guid}}') });"
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "https://shop.example.com/api",
+			"type": "string"
+		},
+		{
+			"key": "api_version",
+			"value": "v1",
+			"type": "string"
+		},
+		{
+			"key": "retries",
+			"value": 3,
+			"type": "number"
+		},
+		{
+			"key": "old",
+			"value": "unused",
+			"disabled": true
+		}
+	]
+}
