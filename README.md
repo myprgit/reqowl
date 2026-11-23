@@ -23,38 +23,79 @@ diff cleanly in git. Runs on Linux, macOS and Windows.
 > Status: early. Everything above works; expect rough edges. See
 > [Limitations](#limitations).
 
+## Install
+
+Installers for Linux (`.deb`, `.rpm`, AppImage), macOS (`.dmg`) and Windows
+(`.msi`, `.exe`) will be attached to each [release](../../releases), starting
+with the first one. Until then, build one yourself; see [Building](#building).
+
+On Debian or Ubuntu, after building:
+
+```sh
+sudo apt install ./target/release/bundle/deb/reqowl_0.1.0_amd64.deb
+reqowl-app ~/notes/my-api        # or open it from the app menu
+```
+
 ## Using the app
 
-| | |
-|---|---|
-| Run the block under the cursor | `Ctrl+Enter` (`⌘+Enter`), or click ▶ in the margin |
-| Run every block on the page | `Ctrl+Shift+Enter` |
-| Stop a run | `Esc` |
-| Response panel (body, headers, request, history) | click a response, `Ctrl+J` to toggle |
-| Go to page | `Ctrl+P` |
-| New page | `Ctrl+N` |
-| Rename a page | double-click it, or `F2` |
-| Edit the block under the cursor as a form | `Ctrl+E`, or the block's "form" link |
-| Add a request | "+ Request" in the top bar |
-| Settings (theme, fonts, size) | `Ctrl+,` |
+Open a folder as a notebook, create one, or import a Postman or Insomnia
+export from the start screen. Pages save as you type.
 
-Pages save as you type. Every request can be edited as a form in the
-panel's Edit tab: method and URL, query params, headers, auth, body (JSON,
-text, form fields or GraphQL) and settings. The form writes the block's
-text as you type, and picks up changes you make to the text. Responses can
-be folded to a single status line with ▾, or all at once with "Hide
-responses". Drag pages in the tree to reorder or nest them;
-right-click for more. Deleted pages go to `.reqowl/trash/` in the notebook.
-The last response of every block comes back when you reopen a page, from the
-run history in `.reqowl/` (git-ignored, 50 runs per block).
+### Writing requests
 
-![The response panel in the light theme](docs/screenshots/panel-light.png)
+Add a ` ```http ` block anywhere in a page, or click **+ Request** in the top
+bar. Run it with ▶ in the margin or `Ctrl+Enter`; the response appears under
+the block. A block that uses `{{name.response…}}` runs the named block first
+if it hasn't run yet. Paste a curl command into a page and it becomes a
+block.
+
+### Or fill in a form
+
+Every block can also be edited as a form: click its **form** link or press
+`Ctrl+E`. The panel's Edit tab has the method and URL, query params,
+headers, auth (bearer, basic, API key, OAuth2), the body (JSON, text, form
+fields or GraphQL) and settings (name, timeout, redirects, TLS checks). The
+form writes the block's text as you type and picks up changes you make to
+the text, so you can switch between the two at any time. Comments in the
+block are kept.
+
+![Editing a request as a form](docs/screenshots/form-light.png)
+
+### Responses
+
+Fold a response to its status line with ▾, or all of them with **Hide
+responses**; the choice is remembered per page. Click a response to open
+the panel with its body, headers, the request as sent, and the block's
+history. The last response of every block comes back when you reopen a
+page, from the run history in `.reqowl/` (git-ignored, 50 runs per block).
 
 "Pin to page" writes a response into the page as a ` ```response ` block, so
 an example response can live in the notes. Values from `*.local.toml` files
 and `Authorization` headers are hidden in history and in pinned responses.
 
-## A page
+![The response panel](docs/screenshots/panel-light.png)
+
+### Pages
+
+Drag pages in the tree to reorder or nest them; double-click or `F2` to
+rename; right-click for more. Deleted pages go to `.reqowl/trash/` in the
+notebook.
+
+### Shortcuts
+
+| | |
+|---|---|
+| Run the block under the cursor | `Ctrl+Enter` (`⌘+Enter` on macOS), or ▶ in the margin |
+| Run every block on the page | `Ctrl+Shift+Enter` |
+| Stop a run | `Esc` |
+| Edit the block as a form | `Ctrl+E` |
+| Show or hide the response panel | `Ctrl+J` |
+| Go to page | `Ctrl+P` |
+| New page | `Ctrl+N` |
+| Rename a page | `F2` |
+| Settings | `Ctrl+,` |
+
+## Page syntax
 
 ````markdown
 # Login flow
@@ -157,10 +198,16 @@ Variable lookup order: page front matter, `env/<name>.local.toml`,
 
 ## Themes and fonts
 
-Settings (`Ctrl+,`) has six built-in themes (Paper, Ink, Kraft, Graph,
-Blueprint, Night), can follow the system's light/dark mode, and lets you
-pick the fonts for notes and for requests, the text size, and whether the
-page is ruled. To write your own theme, see [docs/themes.md](docs/themes.md).
+Settings (`Ctrl+,`) has six built-in themes: Paper, Ink, Kraft, Graph,
+Blueprint and Night. It can follow the system's light/dark mode with a theme
+for each, and lets you pick the fonts for notes and for requests, the text
+size, and whether the page is ruled.
+
+![Settings](docs/screenshots/settings.png)
+
+Your own themes are small TOML files in the app's themes folder (**Settings →
+Open themes folder**); it starts with a commented example. Every colour key
+is listed in [docs/themes.md](docs/themes.md).
 
 ## Import
 
@@ -171,6 +218,9 @@ and Insomnia environments become `env/*.toml` files, with secret values in
 `env/*.local.toml`. Scripts aren't run; they are kept on the page as notes.
 
 ## CLI
+
+Install it with `cargo install --path crates/reqowl-cli`, or run it from
+the repository:
 
 ```sh
 python3 scripts/demo-server.py &          # demo API on :8787
@@ -210,7 +260,7 @@ history, import), `crates/reqowl-cli`, `src-tauri` (desktop shell),
 
 - Installers are not code-signed yet: macOS will ask you to allow the app
   in System Settings, Windows SmartScreen will warn.
-- macOS and Windows builds are tested in CI only so far.
+- The macOS and Windows builds haven't been tried on real machines yet.
 - OAuth2 tokens live in memory, so you sign in again after a restart.
 - No request scripting (pre-request/test scripts); imported scripts are kept as notes.
 - WebSocket messages can only be sent as text.
