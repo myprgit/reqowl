@@ -11,6 +11,8 @@ use crate::request::{Kind, RequestSpec};
 use crate::vars::Recorded;
 
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
+/// Bodies beyond this are cut off; the rest of the stream is dropped.
+pub const MAX_BODY: usize = 64 * 1024 * 1024;
 const USER_AGENT: &str = concat!("reqowl/", env!("CARGO_PKG_VERSION"));
 
 #[derive(Debug, Clone)]
@@ -22,6 +24,8 @@ pub struct Response {
     pub url: String,
     pub headers: Vec<(String, String)>,
     pub body: Vec<u8>,
+    /// The body was longer than [`MAX_BODY`] and was cut off.
+    pub truncated: bool,
     pub elapsed: Duration,
 }
 
@@ -127,7 +131,18 @@ impl Client {
                 )
             })
             .collect();
-        let body = resp.bytes().await.map_err(|e| Error::Http(error_chain(&e)))?.to_vec();
+        let mut resp = resp;
+        let mut body = Vec::new();
+        let mut truncated = false;
+        while let Some(chunk) = resp.chunk().await.map_err(|e| Error::Http(error_chain(&e)))? {
+            let room = MAX_BODY - body.len();
+            if chunk.len() > room {
+                body.extend_from_slice(&chunk[..room]);
+                truncated = true;
+                break;
+            }
+            body.extend_from_slice(&chunk);
+        }
 
         Ok(Response {
             status: status.as_u16(),
@@ -136,6 +151,7 @@ impl Client {
             url,
             headers,
             body,
+            truncated,
             elapsed: started.elapsed(),
         })
     }

@@ -4,6 +4,7 @@ use std::process::ExitCode;
 use anyhow::{Context as _, Result};
 use clap::{Parser, Subcommand};
 use reqowl_core::exec::Response;
+use reqowl_core::mask::Masker;
 use reqowl_core::page::{self, Block};
 use reqowl_core::request;
 use reqowl_core::session::{Session, find_block, with_dependencies};
@@ -128,13 +129,19 @@ async fn run(cli: Cli) -> Result<bool> {
                 if n > 0 && !quiet {
                     println!();
                 }
+                let masker = Masker::new(&session.ctx);
                 match session.run(b).await {
                     Ok(out) => {
-                        print_response(&out.request, &out.response, include, quiet);
+                        print_response(&out.request, &out.response, include, quiet, &masker);
                         ok &= out.response.status < 400;
                     }
                     Err(e) => {
-                        eprintln!("block {} (line {}): {e}", b.index + 1, b.content_line);
+                        eprintln!(
+                            "block {} (line {}): {}",
+                            b.index + 1,
+                            b.content_line,
+                            masker.mask(&e.to_string())
+                        );
                         ok = false;
                         if !keep_going {
                             break;
@@ -147,11 +154,13 @@ async fn run(cli: Cli) -> Result<bool> {
     }
 }
 
-fn print_response(req: &request::RequestSpec, resp: &Response, include: bool, quiet: bool) {
+/// Secret values are masked in the URL and headers; the body is printed as
+/// received, since piping it somewhere is often the point.
+fn print_response(req: &request::RequestSpec, resp: &Response, include: bool, quiet: bool, masker: &Masker) {
     println!(
         "{} {}  →  {} {}  ·  {} ms  ·  {} B",
         req.method,
-        req.url,
+        masker.mask(&req.url),
         resp.status,
         resp.reason,
         resp.elapsed.as_millis(),
@@ -162,8 +171,11 @@ fn print_response(req: &request::RequestSpec, resp: &Response, include: bool, qu
     }
     if include {
         for (k, v) in &resp.headers {
-            println!("{k}: {v}");
+            println!("{k}: {}", masker.mask(v));
         }
+    }
+    if resp.truncated {
+        eprintln!("(body cut off at {} MB)", reqowl_core::exec::MAX_BODY / (1024 * 1024));
     }
     if resp.body.is_empty() {
         return;

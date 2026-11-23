@@ -7,6 +7,8 @@
 pub mod env;
 pub mod error;
 pub mod exec;
+pub mod history;
+pub mod mask;
 pub mod page;
 pub mod request;
 pub mod session;

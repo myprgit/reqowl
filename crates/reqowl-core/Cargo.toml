@@ -13,6 +13,7 @@ reqwest = { version = "0.13", features = ["gzip", "brotli", "deflate", "zstd"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_json_path = "0.7"
+rusqlite = { version = "0.43", features = ["bundled"] }
 thiserror = "2"
 tokio = { version = "1", features = ["time"] }
 toml = "1"
