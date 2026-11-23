@@ -6,7 +6,7 @@
 // view plugin, so positions and decorations are derived here from the syntax
 // tree on every relevant transaction.
 
-import { type EditorState, type Extension, type Range, StateEffect, StateField } from "@codemirror/state";
+import { type EditorState, type Extension, Prec, type Range, StateEffect, StateField } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView, GutterMarker, WidgetType, gutter, keymap } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
 import { type Shown, formatSize, prettyBody, statusClass } from "../api";
@@ -241,7 +241,8 @@ export function httpBlocks(handlers: HttpBlockHandlers): Extension {
     },
   });
 
-  const runKeys = keymap.of([
+  // Highest precedence: the default keymap binds Mod-Enter to "insert blank line".
+  const runKeys = Prec.highest(keymap.of([
     {
       key: "Mod-Enter",
       run(view) {
@@ -251,7 +252,7 @@ export function httpBlocks(handlers: HttpBlockHandlers): Extension {
         return true;
       },
     },
-  ]);
+  ]));
 
   return [blocksField, overlayField, decoField, runGutter, runKeys];
 }

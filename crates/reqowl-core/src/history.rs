@@ -22,6 +22,20 @@ pub const MAX_STORED_BODY: usize = 2 * 1024 * 1024;
 /// Runs kept per block; older ones are pruned.
 pub const KEEP_PER_BLOCK: i64 = 50;
 
+/// Credentials in auth headers are hidden even when they didn't come from a
+/// secret file (e.g. OAuth2 tokens, or a token typed into the page). The
+/// scheme stays visible so the entry still shows what kind of auth was used.
+fn mask_header(name: &str, value: &str, masker: &Masker) -> String {
+    let n = name.to_ascii_lowercase();
+    if n == "authorization" || n == "proxy-authorization" {
+        return match value.split_once(' ') {
+            Some((scheme, _)) => format!("{scheme} ‹hidden›"),
+            None => "‹hidden›".into(),
+        };
+    }
+    masker.mask(value)
+}
+
 /// Stable identity of a block within its page, so history survives edits:
 /// `@name` when present, else position plus method and URL template.
 pub fn block_key(block: &Block) -> String {
@@ -127,7 +141,7 @@ impl History {
         let req_headers: Vec<(String, String)> = req
             .headers
             .iter()
-            .map(|h| (h.name.clone(), masker.mask(&h.value)))
+            .map(|h| (h.name.clone(), mask_header(&h.name, &h.value, masker)))
             .collect();
         let req_body = req.body.as_deref().map(|b| masker.mask(b));
 
@@ -340,7 +354,7 @@ mod tests {
             Some(&*format!("n{} ‹secret:token›", KEEP_PER_BLOCK + 2))
         );
         assert_eq!(e.url, "http://h/?t=‹secret:token›");
-        assert_eq!(e.request_headers[0].1, "Bearer ‹secret:token›");
+        assert_eq!(e.request_headers[0].1, "Bearer ‹hidden›");
         assert_eq!(e.response_headers[0].1, "‹secret:token›");
         assert!(e.request_body.as_deref().unwrap().contains("‹secret:token›"));
 

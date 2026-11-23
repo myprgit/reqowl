@@ -5,7 +5,7 @@ mod tree;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use base64::Engine;
@@ -18,10 +18,13 @@ use reqowl_core::env::{CONFIG_FILE, ENV_DIR, STATE_DIR, Workspace};
 use reqowl_core::exec::Response;
 use reqowl_core::history::{self, Entry, History};
 use reqowl_core::mask::Masker;
+use reqowl_core::oauth::TokenCache;
 use reqowl_core::page::{self, Block};
 use reqowl_core::request::{self, RequestSpec};
 use reqowl_core::session::{Session, with_dependencies};
 use reqowl_core::vars::Recorded;
+use reqowl_core::ws::{self, WsEvent, WsHandle};
+use tauri_plugin_opener::OpenerExt;
 
 use tree::{Node, Res, check_id, md_path};
 
@@ -33,6 +36,9 @@ struct AppState {
     responses: Mutex<HashMap<String, HashMap<String, Recorded>>>,
     runs: Mutex<HashMap<u64, oneshot::Sender<()>>>,
     watcher: Mutex<Option<Debouncer<RecommendedWatcher>>>,
+    /// OAuth2 tokens, shared by every run so sign-in happens once.
+    tokens: Arc<TokenCache>,
+    sockets: Mutex<HashMap<u64, WsHandle>>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -231,12 +237,28 @@ fn trash_page(state: State<AppState>, id: String) -> Res<()> {
     tree::trash_page(&root(&state)?, &id).map(|_| ())
 }
 
+/// A session for one run: workspace variables, the page's earlier responses,
+/// shared OAuth2 tokens, and a browser for sign-in pages.
+fn open_session(app: &AppHandle, state: &AppState, id: &str, parsed: &page::Page, env: Option<&str>) -> Res<Session> {
+    let root = root(state)?;
+    let mut session = Session::open(&md_path(&root, id), parsed, env).map_err(s)?;
+    session.ctx.responses = lock(&state.responses).get(id).cloned().unwrap_or_default();
+    session.set_token_cache(state.tokens.clone());
+    let app = app.clone();
+    session.set_browser_opener(Box::new(move |url: &str| {
+        let _ = app.opener().open_url(url, None::<&str>);
+    }));
+    Ok(session)
+}
+
 #[derive(Serialize)]
 struct BlockInfo {
     /// 0-based line of the opening fence.
     line: usize,
     key: String,
     name: Option<String>,
+    /// `http`, `graphql` or `websocket`.
+    kind: Option<&'static str>,
     method: Option<String>,
     url: Option<String>,
     error: Option<String>,
@@ -259,6 +281,11 @@ fn page_blocks(text: String) -> Vec<BlockInfo> {
                 line: fence_line(b),
                 key: history::block_key(b),
                 name: parsed.as_ref().ok().and_then(|s| s.name().map(str::to_string)),
+                kind: parsed.as_ref().ok().map(|s| match s.kind {
+                    request::Kind::Http => "http",
+                    request::Kind::GraphQl => "graphql",
+                    request::Kind::WebSocket => "websocket",
+                }),
                 method: parsed.as_ref().ok().map(|s| s.method.clone()),
                 url: parsed.as_ref().ok().map(|s| s.url.clone()),
                 error: parsed.err().map(|e| e.to_string()),
@@ -345,6 +372,7 @@ fn response_view(r: &Response) -> ResponseView {
 /// depends on run first when their responses aren't known yet.
 #[tauri::command]
 async fn run_block(
+    app: AppHandle,
     state: State<'_, AppState>,
     run_id: u64,
     id: String,
@@ -365,8 +393,7 @@ async fn run_block(
         .find(|b| fence_line(b) == line)
         .ok_or_else(|| "there's no http block on that line".to_string())?;
 
-    let mut session = Session::open(&page_path, &parsed, env.as_deref()).map_err(s)?;
-    session.ctx.responses = lock(&state.responses).get(&id).cloned().unwrap_or_default();
+    let mut session = open_session(&app, &state, &id, &parsed, env.as_deref())?;
 
     let order: Vec<&Block> = with_dependencies(&parsed, &[target])
         .into_iter()
@@ -482,39 +509,183 @@ fn history_list(state: State<AppState>, id: String, key: Option<String>, limit: 
 
 /// Copies a block as a curl command, with variables filled in for `env`.
 #[tauri::command]
-fn block_as_curl(state: State<AppState>, id: String, text: String, line: usize, env: Option<String>) -> Res<String> {
-    let root = root(&state)?;
+fn block_as_curl(
+    app: AppHandle,
+    state: State<AppState>,
+    id: String,
+    text: String,
+    line: usize,
+    env: Option<String>,
+) -> Res<String> {
     let parsed = page::parse(&text);
     let b = parsed
         .blocks
         .iter()
         .find(|b| fence_line(b) == line)
         .ok_or("there's no http block on that line")?;
-    let mut session = Session::open(&md_path(&root, &id), &parsed, env.as_deref()).map_err(s)?;
-    session.ctx.responses = lock(&state.responses).get(&id).cloned().unwrap_or_default();
+    let session = open_session(&app, &state, &id, &parsed, env.as_deref())?;
     let spec = session.prepare(b).map_err(s)?;
-    Ok(to_curl(&spec))
+    Ok(reqowl_core::export::to_curl(&spec))
 }
 
-fn shell_quote(s: &str) -> String {
-    format!("'{}'", s.replace('\'', r"'\''"))
+/// Turns a pasted curl command into the text of an http block, or None.
+#[tauri::command]
+fn curl_to_block(text: String) -> Option<String> {
+    if !reqowl_core::import::curl::looks_like_curl(&text) {
+        return None;
+    }
+    reqowl_core::import::curl::parse(&text)
+        .ok()
+        .map(|spec| request::to_block_text(&spec))
 }
 
-fn to_curl(spec: &RequestSpec) -> String {
-    let mut out = format!("curl -X {} {}", spec.method, shell_quote(&spec.url));
-    for h in &spec.headers {
-        out.push_str(&format!(
-            " \\\n  -H {}",
-            shell_quote(&format!("{}: {}", h.name, h.value))
-        ));
+/// Imports a Postman/Insomnia export or curl command into a new notebook folder.
+#[tauri::command]
+fn import_file(source: String, target: String) -> Res<String> {
+    let text = std::fs::read_to_string(&source).map_err(|e| format!("{source}: {e}"))?;
+    let imported = reqowl_core::import::detect_and_parse(&text).map_err(s)?;
+    let dir = PathBuf::from(&target);
+    std::fs::create_dir_all(&dir).map_err(|e| format!("{target}: {e}"))?;
+    reqowl_core::import::write_workspace(&imported, &dir).map_err(s)?;
+    Ok(dir.display().to_string())
+}
+
+/// Variable names for `{{` completion. Values are not sent to the UI.
+#[tauri::command]
+fn variable_names(state: State<AppState>, id: Option<String>, text: String, env: Option<String>) -> Res<Vec<String>> {
+    let root = root(&state)?;
+    let parsed = page::parse(&text);
+    let ws = Workspace::open(&root).map_err(s)?;
+    let env = env.map(|e| ws.load_env(&e)).transpose().ok().flatten();
+    let mut names: Vec<String> = ws
+        .layers(&parsed.front_matter, env.as_ref())
+        .map_err(s)?
+        .into_iter()
+        .flat_map(|l| l.vars.into_keys())
+        .collect();
+    for b in &parsed.blocks {
+        if let Ok(spec) = request::parse(&b.content, b.content_line)
+            && let Some(n) = spec.name()
+        {
+            names.extend([
+                format!("{n}.response.body.$."),
+                format!("{n}.response.status"),
+                format!("{n}.response.headers."),
+            ]);
+        }
     }
-    if let Some(b) = &spec.body {
-        out.push_str(&format!(" \\\n  --data-raw {}", shell_quote(b)));
+    let _ = id;
+    names.sort();
+    names.dedup();
+    Ok(names)
+}
+
+#[derive(Serialize, Clone)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+enum SocketEvent {
+    Opened {
+        status: u16,
+        headers: Vec<(String, String)>,
+        elapsed_ms: u64,
+    },
+    Received {
+        text: String,
+    },
+    ReceivedBinary {
+        size: usize,
+    },
+    Sent {
+        text: String,
+    },
+    Closed {
+        code: Option<u16>,
+        reason: String,
+    },
+    Error {
+        message: String,
+    },
+}
+
+#[derive(Serialize, Clone)]
+struct SocketMessage {
+    conn: u64,
+    ts: u64,
+    event: SocketEvent,
+}
+
+/// Opens the WEBSOCKET block on `line`. Events arrive as `ws-event`.
+#[tauri::command]
+async fn ws_connect(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    conn: u64,
+    id: String,
+    text: String,
+    line: usize,
+    env: Option<String>,
+) -> Res<()> {
+    check_id(&id)?;
+    let parsed = page::parse(&text);
+    let b = parsed
+        .blocks
+        .iter()
+        .find(|b| fence_line(b) == line)
+        .ok_or("there's no block on that line")?;
+    let session = open_session(&app, &state, &id, &parsed, env.as_deref())?;
+    let mut spec = session.prepare(b).map_err(s)?;
+    session.authorize(&mut spec).await.map_err(s)?;
+
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let handle = ws::connect(&spec, tx).await.map_err(s)?;
+    lock(&state.sockets).insert(conn, handle);
+
+    let emitter = app.clone();
+    tauri::async_runtime::spawn(async move {
+        while let Some(e) = rx.recv().await {
+            let closed = matches!(e, WsEvent::Closed { .. });
+            let event = match e {
+                WsEvent::Opened {
+                    status,
+                    headers,
+                    elapsed,
+                } => SocketEvent::Opened {
+                    status,
+                    headers,
+                    elapsed_ms: elapsed.as_millis() as u64,
+                },
+                WsEvent::Text(text) => SocketEvent::Received { text },
+                WsEvent::Binary(b) => SocketEvent::ReceivedBinary { size: b.len() },
+                WsEvent::Sent(text) => SocketEvent::Sent { text },
+                WsEvent::Closed { code, reason } => SocketEvent::Closed { code, reason },
+                WsEvent::Error(message) => SocketEvent::Error { message },
+            };
+            let ts = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_millis() as u64);
+            let _ = emitter.emit("ws-event", SocketMessage { conn, ts, event });
+            if closed {
+                if let Some(state) = emitter.try_state::<AppState>() {
+                    lock(&state.sockets).remove(&conn);
+                }
+                break;
+            }
+        }
+    });
+    Ok(())
+}
+
+#[tauri::command]
+fn ws_send(state: State<AppState>, conn: u64, text: String) -> Res<()> {
+    let sockets = lock(&state.sockets);
+    let h = sockets.get(&conn).ok_or("this connection is closed")?;
+    h.send(text).map_err(s)
+}
+
+#[tauri::command]
+fn ws_close(state: State<AppState>, conn: u64) {
+    if let Some(h) = lock(&state.sockets).remove(&conn) {
+        h.close();
     }
-    if spec.directives.insecure {
-        out.push_str(" -k");
-    }
-    out
 }
 
 /// Watches the workspace and tells the UI which pages changed on disk.
@@ -551,6 +722,24 @@ fn watch(app: AppHandle, root: &Path) -> Option<Debouncer<RecommendedWatcher>> {
     Some(deb)
 }
 
+/// Frontend errors end up in the terminal that started the app.
+#[tauri::command]
+fn log_ui(level: String, message: String) {
+    eprintln!("[ui {level}] {message}");
+}
+
+/// A folder passed on the command line (`reqowl-app ~/notes/api`), if any.
+#[tauri::command]
+fn startup_path() -> Option<String> {
+    std::env::args()
+        .skip(1)
+        .find(|a| !a.starts_with('-'))
+        .map(PathBuf::from)
+        .filter(|p| p.is_dir())
+        .and_then(|p| p.canonicalize().ok())
+        .map(|p| p.display().to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -583,6 +772,14 @@ pub fn run() {
             latest_runs,
             history_list,
             block_as_curl,
+            curl_to_block,
+            import_file,
+            variable_names,
+            ws_connect,
+            ws_send,
+            ws_close,
+            startup_path,
+            log_ui,
         ])
         .run(tauri::generate_context!())
         .expect("error while running reqowl");

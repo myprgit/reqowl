@@ -8,7 +8,7 @@
     "skipLibCheck": true,
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "types": ["svelte"]
   },
   "include": ["ui/src/**/*.ts", "ui/src/**/*.svelte", "vite.config.ts"]

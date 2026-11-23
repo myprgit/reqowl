@@ -1,12 +1,48 @@
 # reqowl
 
-A notebook for APIs. Pages are Markdown files in a folder tree; any
-` ```http ` block in a page is a request you can run, and its response
-shows up right under it. Notes and requests live together, in plain files
-that diff cleanly in git.
+<img src="assets/mascot/reqowl-256.png" alt="" width="96" align="right" />
 
-> Status: early development. The core and the CLI work; the desktop app
-> (Tauri, Linux/macOS/Windows) is next.
+**A notebook for APIs.** Pages are Markdown files in a folder tree. Any
+` ```http ` block in a page is a request you can run, and its response shows
+up right under it. Notes and requests live together, in plain files that
+diff cleanly in git. Runs on Linux, macOS and Windows.
+
+![A page with two chained requests and their responses](docs/screenshots/chained-dark.png)
+
+- **Notes first.** Write the why next to the request: setup steps, gotchas, links.
+- **Plain files.** A notebook is a folder: `.md` pages, `env/*.toml` environments. No account, no cloud.
+- **Familiar syntax.** Blocks use the VS Code REST Client / JetBrains HTTP Client format.
+- **Chaining.** Name a block and use its response later: `{{login.response.body.$.token}}`. Running a block runs what it depends on.
+- **Secrets stay out of git** in `env/*.local.toml`, and are hidden in history.
+- **HTTP, GraphQL, WebSocket, OAuth2** (client credentials, authorization code with PKCE, password).
+- **Import** Postman collections and environments, Insomnia exports (v4 JSON, v5 YAML), and curl commands. Paste a curl command into a page and it becomes a block.
+- **A CLI** that runs the same pages, for scripts and CI.
+
+> Status: early. Everything above works; expect rough edges. See
+> [Limitations](#limitations).
+
+## Using the app
+
+| | |
+|---|---|
+| Run the block under the cursor | `Ctrl+Enter` (`⌘+Enter`), or click ▶ in the margin |
+| Run every block on the page | `Ctrl+Shift+Enter` |
+| Stop a run | `Esc` |
+| Response panel (body, headers, request, history) | click a response, `Ctrl+J` to toggle |
+| Go to page | `Ctrl+P` |
+| New page | `Ctrl+N` |
+| Rename a page | double-click it, or `F2` |
+
+Pages save as you type. Drag pages in the tree to reorder or nest them;
+right-click for more. Deleted pages go to `.reqowl/trash/` in the notebook.
+The last response of every block comes back when you reopen a page, from the
+run history in `.reqowl/` (git-ignored, 50 runs per block).
+
+![The response panel in the light theme](docs/screenshots/panel-light.png)
+
+"Pin to page" writes a response into the page as a ` ```response ` block, so
+an example response can live in the notes. Values from `*.local.toml` files
+and `Authorization` headers are hidden in history and in pinned responses.
 
 ## A page
 
@@ -53,6 +89,8 @@ Authorization: Bearer {{token}}
 {"subscribe": "prices"}
 ```
 ````
+
+![A WebSocket conversation in the panel](docs/screenshots/websocket.png)
 
 Headers go on the handshake (`@auth` works as usual). The body holds the
 messages to send once the connection opens, separated by lines that are
@@ -107,6 +145,14 @@ my-api/
 Variable lookup order: page front matter, `env/<name>.local.toml`,
 `env/<name>.toml`, `[vars]` in `reqowl.toml`.
 
+## Import
+
+In the app: **Import Postman or Insomnia…** at the bottom of the sidebar
+(or on the start screen), then pick an empty folder for the new notebook.
+Each request becomes a page; folders become pages with children; Postman
+and Insomnia environments become `env/*.toml` files, with secret values in
+`env/*.local.toml`. Scripts aren't run; they are kept on the page as notes.
+
 ## CLI
 
 ```sh
@@ -120,6 +166,37 @@ cargo run -p reqowl-cli -- envs examples/demo
 Exit status: 0 if every block ran and got a response below 400; 1 if a block
 failed or got 4xx/5xx; 2 if the page or workspace could not be loaded
 (missing file, unknown environment).
+
+## Building
+
+You need Rust (stable) and Node.js 22.
+
+```sh
+# Linux only: system libraries for the webview
+sudo apt install libwebkit2gtk-4.1-dev libsoup-3.0-dev librsvg2-dev libayatana-appindicator3-dev libxdo-dev
+
+npm ci
+npm run tauri dev            # run the app
+npm run tauri build          # installers in target/release/bundle/
+cargo test --workspace && npm test
+```
+
+`reqowl-app <folder>` opens a notebook directly. On Linux the app turns off
+WebKit's DMA-BUF renderer, which leaves the window blank on some GPU
+drivers; set `WEBKIT_DISABLE_DMABUF_RENDERER=0` to keep it on.
+
+Layout: `crates/reqowl-core` (parsing, variables, HTTP/WebSocket/OAuth2,
+history, import), `crates/reqowl-cli`, `src-tauri` (desktop shell),
+`ui` (Svelte + CodeMirror).
+
+## Limitations
+
+- Installers are not code-signed yet: macOS will ask you to allow the app
+  in System Settings, Windows SmartScreen will warn.
+- macOS and Windows builds are tested in CI only so far.
+- OAuth2 tokens live in memory, so you sign in again after a restart.
+- No request scripting (pre-request/test scripts); imported scripts are kept as notes.
+- WebSocket messages can only be sent as text.
 
 ## License
 

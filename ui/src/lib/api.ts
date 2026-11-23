@@ -20,6 +20,7 @@ export interface BlockInfo {
   line: number;
   key: string;
   name: string | null;
+  kind: "http" | "graphql" | "websocket" | null;
   method: string | null;
   url: string | null;
   error: string | null;
@@ -166,7 +167,41 @@ export const api = {
     invoke<HistoryEntry[]>("history_list", { id, key, limit }),
   blockAsCurl: (id: string, text: string, line: number, env: string | null) =>
     invoke<string>("block_as_curl", { id, text, line, env }),
+  curlToBlock: (text: string) => invoke<string | null>("curl_to_block", { text }),
+  importFile: (source: string, target: string) => invoke<string>("import_file", { source, target }),
+  variableNames: (id: string | null, text: string, env: string | null) =>
+    invoke<string[]>("variable_names", { id, text, env }),
+  wsConnect: (conn: number, id: string, text: string, line: number, env: string | null) =>
+    invoke<void>("ws_connect", { conn, id, text, line, env }),
+  wsSend: (conn: number, text: string) => invoke<void>("ws_send", { conn, text }),
+  wsClose: (conn: number) => invoke<void>("ws_close", { conn }),
+  startupPath: () => invoke<string | null>("startup_path"),
+  logUi: (level: string, message: string) => invoke<void>("log_ui", { level, message }).catch(() => {}),
 };
+
+export type SocketEvent =
+  | { kind: "opened"; status: number; headers: Pairs; elapsed_ms: number }
+  | { kind: "received"; text: string }
+  | { kind: "received_binary"; size: number }
+  | { kind: "sent"; text: string }
+  | { kind: "closed"; code: number | null; reason: string }
+  | { kind: "error"; message: string };
+
+export interface SocketMessage {
+  conn: number;
+  ts: number;
+  event: SocketEvent;
+}
+
+/** A WebSocket conversation shown in the panel. */
+export interface Socket {
+  conn: number;
+  key: string;
+  line: number;
+  url: string;
+  open: boolean;
+  log: SocketMessage[];
+}
 
 export function errorText(e: unknown): string {
   return typeof e === "string" ? e : e instanceof Error ? e.message : JSON.stringify(e);

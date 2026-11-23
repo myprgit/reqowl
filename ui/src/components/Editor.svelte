@@ -8,8 +8,25 @@
     handlers: HttpBlockHandlers;
     onChange: (text: string) => void;
     variableNames: () => string[];
+    /** Turns pasted text into something else (e.g. curl into an http block), or null to paste as is. */
+    transformPaste: (text: string) => Promise<string | null>;
   }
-  let { handlers, onChange, variableNames }: Props = $props();
+  let { handlers, onChange, variableNames, transformPaste }: Props = $props();
+
+  // Pasted curl commands: claim the paste synchronously, convert, then insert.
+  const pasteHandler = EditorView.domEventHandlers({
+    paste(event, view) {
+      const text = event.clipboardData?.getData("text/plain") ?? "";
+      if (!/^\s*curl\s/.test(text)) return false;
+      event.preventDefault();
+      const { from, to } = view.state.selection.main;
+      transformPaste(text).then((out) => {
+        const insert = out ?? text;
+        view.dispatch({ changes: { from, to, insert }, selection: { anchor: from + insert.length }, scrollIntoView: true });
+      });
+      return true;
+    },
+  });
 
   let host: HTMLDivElement;
   let view: EditorView | undefined;
@@ -29,7 +46,7 @@
         language,
         onChange: (t) => onChange(t),
         variableNames,
-        extra: language === "markdown" ? [httpBlocks(handlers)] : [],
+        extra: language === "markdown" ? [httpBlocks(handlers), pasteHandler] : [],
       }),
     );
     if (language === "markdown") view.dispatch({ effects: setOverlay.of(lastOverlay) });
@@ -84,12 +101,9 @@
   .editor {
     height: 100%;
     min-height: 0;
-    /* Ruled paper: one rule per text line, scrolling with the text. */
-    background-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), var(--rule) calc(var(--line) - 1px));
-    background-size: 100% var(--line);
-    background-attachment: local;
   }
 
+  /* Ruled paper: one rule under each text line, scrolling with the text. */
   .editor :global(.cm-scroller) {
     background-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), var(--rule) calc(var(--line) - 1px));
     background-size: 100% var(--line);
@@ -100,14 +114,24 @@
   /* The margin: a double amber rule; run markers sit on it. */
   .editor :global(.cm-run-gutter) {
     width: var(--margin-x);
-    border-right: 3px double var(--amber);
+    background: linear-gradient(
+      to left,
+      var(--amber) 0 2px,
+      transparent 2px 5px,
+      var(--amber) 5px 6px,
+      transparent 6px
+    );
+  }
+
+  .editor :global(.cm-run-gutter .cm-gutterElement) {
     display: flex;
     justify-content: flex-end;
+    align-items: center;
   }
 
   .editor :global(.cm-run-marker) {
     width: 30px;
-    margin-right: 8px;
+    margin-right: 12px;
     text-align: center;
     color: var(--amber-ink);
     font-size: 13px;

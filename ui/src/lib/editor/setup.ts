@@ -18,6 +18,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirro
 import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
 import {
   HighlightStyle,
+  LanguageSupport,
   LanguageDescription,
   StreamLanguage,
   bracketMatching,
@@ -27,11 +28,11 @@ import {
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap, type CompletionSource } from "@codemirror/autocomplete";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { json } from "@codemirror/lang-json";
-import { http } from "@codemirror/legacy-modes/mode/http";
+import { httpRequest } from "./httpLang";
 import { toml } from "@codemirror/legacy-modes/mode/toml";
 import { tags as t } from "@lezer/highlight";
 
-const httpLang = StreamLanguage.define(http);
+const httpLang = new LanguageSupport(httpRequest);
 
 const codeLanguages = [
   LanguageDescription.of({ name: "http", alias: ["rest"], support: httpLang }),
@@ -47,10 +48,12 @@ const highlight = HighlightStyle.define([
   { tag: t.emphasis, fontStyle: "italic" },
   { tag: t.strikethrough, textDecoration: "line-through" },
   { tag: t.link, color: "var(--ink)", textDecoration: "underline" },
-  { tag: t.url, color: "var(--ink-soft)" },
-  { tag: [t.processingInstruction, t.monospace], class: "cm-inline-code" },
+  { tag: t.url, color: "var(--ink)" },
+  { tag: t.monospace, class: "cm-inline-code" },
+  { tag: t.processingInstruction, color: "var(--ink-faint)" },
   { tag: t.quote, color: "var(--ink-soft)", fontStyle: "italic" },
-  { tag: [t.meta, t.comment, t.contentSeparator], color: "var(--ink-faint)" },
+  { tag: [t.comment, t.contentSeparator], color: "var(--ink-faint)" },
+  { tag: t.meta, color: "var(--amber-ink)", fontWeight: "700" },
   { tag: t.keyword, color: "var(--amber-ink)", fontWeight: "700" },
   { tag: [t.atom, t.bool, t.null], color: "var(--amber-ink)" },
   { tag: t.number, color: "var(--ok)" },
@@ -101,6 +104,7 @@ export const themeCompartment = new Compartment();
 
 const baseTheme = EditorView.theme({
   "&": { height: "100%", backgroundColor: "transparent", color: "var(--ink)" },
+  "&.cm-focused": { outline: "none" },
   ".cm-scroller": {
     fontFamily: "var(--font-note)",
     fontVariationSettings: "var(--note-axes)",
