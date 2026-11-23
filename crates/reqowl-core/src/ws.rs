@@ -479,7 +479,9 @@ mod tests {
             .local_addr()
             .unwrap()
             .port();
-        let spec = request::parse(&format!("# @timeout 2s\nWEBSOCKET ws://127.0.0.1:{port}/"), 1).unwrap();
+        // Windows retries a refused connection for about two seconds before
+        // giving up, so the handshake timeout has to be longer than that.
+        let spec = request::parse(&format!("# @timeout 10s\nWEBSOCKET ws://127.0.0.1:{port}/"), 1).unwrap();
         let (tx, mut rx) = mpsc::unbounded_channel();
         let err = connect(&spec, tx).await.unwrap_err();
         assert!(matches!(err, Error::WebSocket(_)), "{err}");
