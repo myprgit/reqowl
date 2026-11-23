@@ -1,6 +1,19 @@
 <script lang="ts">
-  import { type BlockInfo, type HistoryEntry, type Shown, type Socket, formatSize, isJson, prettyBody, statusClass } from "../lib/api";
+  import {
+    type BlockInfo,
+    type HistoryEntry,
+    type RequestForm,
+    type Shown,
+    type Socket,
+    formatSize,
+    isJson,
+    prettyBody,
+    statusClass,
+  } from "../lib/api";
   import Viewer from "./Viewer.svelte";
+  import RequestEditor from "./RequestEditor.svelte";
+
+  export type Tab = "edit" | "body" | "headers" | "request" | "history" | "messages";
 
   interface Props {
     shown: Shown | undefined;
@@ -11,14 +24,18 @@
     onPin: () => void;
     onCurl: () => void;
     onPickHistory: (e: HistoryEntry) => void;
-    onSend: (text: string) => void;
+    onSendMessage: (text: string) => void;
     onDisconnect: () => void;
     onReconnect: () => void;
+    tab: Tab;
+    form: RequestForm | null;
+    formError: string | null;
+    running: boolean;
+    formFocused: boolean;
+    onFormChange: (f: RequestForm) => void;
+    onSend: () => void;
   }
-  let p: Props = $props();
-
-  type Tab = "body" | "headers" | "request" | "history" | "messages";
-  let tab = $state<Tab>("body");
+  let { tab = $bindable(), formFocused = $bindable(), ...p }: Props = $props();
   let message = $state("");
   let logEl: HTMLDivElement | undefined = $state();
 
@@ -28,7 +45,7 @@
   const json = $derived(p.shown ? isJson(p.shown.contentType, p.shown.body) : false);
 
   $effect(() => {
-    if (isSocket && tab !== "messages" && tab !== "history") tab = "messages";
+    if (isSocket && tab !== "messages" && tab !== "history" && tab !== "edit") tab = "messages";
     if (!isSocket && tab === "messages") tab = "body";
   });
 
@@ -40,7 +57,7 @@
   function send(e: Event) {
     e.preventDefault();
     if (!message.trim()) return;
-    p.onSend(message);
+    p.onSendMessage(message);
     message = "";
   }
 
@@ -72,6 +89,7 @@
       {/if}
     </div>
     <nav class="tabs" aria-label="Response views">
+      <button class:on={tab === "edit"} onclick={() => (tab = "edit")} title="Ctrl+E">Edit</button>
       {#if isSocket}
         <button class:on={tab === "messages"} onclick={() => (tab = "messages")}>Messages</button>
       {:else}
@@ -92,7 +110,20 @@
   </header>
 
   <div class="content">
-    {#if tab === "messages"}
+    {#if tab === "edit"}
+      {#if p.form}
+        <RequestEditor
+          form={p.form}
+          error={p.formError}
+          running={p.running}
+          bind:focused={formFocused}
+          onchange={p.onFormChange}
+          onsend={p.onSend}
+        />
+      {:else}
+        <p class="hint">{p.formError ?? "This block can't be shown as a form."}</p>
+      {/if}
+    {:else if tab === "messages"}
       <div class="log" bind:this={logEl}>
         {#if !p.socket}
           <p class="hint">Run the block to connect.</p>

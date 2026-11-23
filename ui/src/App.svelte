@@ -10,6 +10,7 @@
     fromRun,
     type BlockInfo,
     type HistoryEntry,
+    type RequestForm,
     type Shown,
     type Socket,
     type SocketMessage,
@@ -18,7 +19,7 @@
   } from "./lib/api";
   import Editor from "./components/Editor.svelte";
   import Sidebar from "./components/Sidebar.svelte";
-  import Panel from "./components/Panel.svelte";
+  import Panel, { type Tab } from "./components/Panel.svelte";
   import Welcome from "./components/Welcome.svelte";
   import QuickOpen from "./components/QuickOpen.svelte";
 
@@ -34,8 +35,17 @@
   let varNames: string[] = [];
   const shown = new SvelteMap<string, Shown>();
   const running = new SvelteSet<string>();
+  /** Folded responses on the open page, remembered per page. */
+  const collapsed = new SvelteSet<string>();
   let sockets = $state<Socket[]>([]);
-  let panel = $state<{ key: string } | null>(null);
+  /** The block the panel shows: its key (for responses) and fence line (for editing). */
+  let panel = $state<{ key: string; line: number } | null>(null);
+  let panelTab = $state<Tab>("body");
+  let panelForm = $state<RequestForm | null>(null);
+  let formError = $state<string | null>(null);
+  let formFocused = $state(false);
+  let formTimer: ReturnType<typeof setTimeout> | undefined;
+  let formWrite: Promise<void> | null = null;
   let panelHistory = $state<HistoryEntry[]>([]);
   let panelHeight = $state(300);
   let toast = $state<{ text: string; error: boolean } | null>(null);
@@ -53,6 +63,24 @@
   let stopPageRun = false;
 
   const dirty = $derived(text !== savedText);
+  const collapseKey = () => `reqowl.collapsed.${ws?.root}::${pageId}`;
+  const allFolded = $derived(shown.size > 0 && [...shown.keys()].every((k) => collapsed.has(k)));
+
+  function saveCollapsed() {
+    localStorage.setItem(collapseKey(), JSON.stringify([...collapsed]));
+  }
+
+  function toggleFold(key: string) {
+    if (collapsed.has(key)) collapsed.delete(key);
+    else collapsed.add(key);
+    saveCollapsed();
+  }
+
+  function foldAll(fold: boolean) {
+    collapsed.clear();
+    if (fold) for (const k of shown.keys()) collapsed.add(k);
+    saveCollapsed();
+  }
   const pageId = $derived(doc?.kind === "page" ? doc.id : null);
   const panelShown = $derived(panel ? shown.get(panel.key) : undefined);
   const panelSocket = $derived(panel ? sockets.findLast((s) => s.key === panel!.key) : undefined);
@@ -197,6 +225,8 @@
       panel = null;
       editor?.load(t, "markdown");
       localStorage.setItem(`reqowl.page.${ws?.root}`, id);
+      collapsed.clear();
+      for (const k of JSON.parse(localStorage.getItem(collapseKey()) ?? "[]") as string[]) collapsed.add(k);
       await refreshBlocks(t);
       const latest = await api.latestRuns(id);
       for (const e of latest) shown.set(e.block_key, fromHistory(e));
@@ -235,6 +265,7 @@
     const b = await api.pageBlocks(t);
     if (t !== text) return; // a newer edit is on its way
     blocks = b;
+    syncPanel();
     try {
       varNames = await api.variableNames(pageId, t, env);
     } catch {
@@ -399,7 +430,7 @@
     const runId = ++runSeq;
     activeRun = runId;
     running.add(info.key);
-    if (openPanel) panel = { key: info.key };
+    if (openPanel) panel = { key: info.key, line: info.line };
     try {
       const results = await api.runBlock(runId, id, t, line, env);
       if (pageId !== id) return;
@@ -442,7 +473,8 @@
     const conn = ++runSeq;
     const sock: Socket = { conn, key: info.key, line: info.line, url: info.url ?? "", open: false, log: [] };
     sockets = [...sockets.filter((s) => !(s.key === info.key && !s.open)), sock];
-    panel = { key: info.key };
+    panel = { key: info.key, line: info.line };
+    if (panelTab === "edit") panelTab = "messages";
     running.add(info.key);
     try {
       await api.wsConnect(conn, pageId, t, info.line, env);
@@ -468,8 +500,75 @@
   // ---- panel -------------------------------------------------------------------
 
   async function openPanel(key: string) {
-    panel = { key };
+    const line = blocks.find((b) => b.key === key)?.line ?? panel?.line ?? 0;
+    panel = { key, line };
+    if (panelTab === "edit") panelTab = "body";
     await loadPanelHistory();
+  }
+
+  async function openEdit(line: number) {
+    const key = blocks.find((b) => b.line === line)?.key ?? `#line${line}`;
+    panel = { key, line };
+    panelTab = "edit";
+    await loadForm();
+    loadPanelHistory();
+  }
+
+  /** Keeps the panel on its block when lines shift or a form edit changes the block's key. */
+  function syncPanel() {
+    if (!panel) return;
+    const b = blocks.find((b) => b.key === panel!.key) ?? blocks.find((b) => b.line === panel!.line);
+    if (!b) return;
+    if (b.key !== panel.key || b.line !== panel.line) panel = { key: b.key, line: b.line };
+    if (panelTab === "edit" && !formFocused && !formWrite) loadForm();
+  }
+
+  async function loadForm() {
+    if (!panel || doc?.kind !== "page") return;
+    try {
+      panelForm = await api.blockForm(text, panel.line);
+      formError = null;
+    } catch (e) {
+      panelForm = null;
+      formError = errorText(e);
+    }
+  }
+
+  function onFormChange(f: RequestForm) {
+    panelForm = f;
+    clearTimeout(formTimer);
+    formTimer = setTimeout(() => {
+      formWrite = writeForm(f).finally(() => (formWrite = null));
+    }, 150);
+  }
+
+  async function writeForm(f: RequestForm) {
+    if (!panel) return;
+    try {
+      const content = await api.formToBlock(f);
+      formError = null;
+      editor?.replaceBlockContent(panel.line, content);
+    } catch (e) {
+      formError = errorText(e);
+    }
+  }
+
+  async function sendFromForm() {
+    if (!panel) return;
+    clearTimeout(formTimer);
+    if (panelForm) await writeForm(panelForm);
+    if (formWrite) await formWrite;
+    if (formError) return;
+    await refreshBlocks(text);
+    await runAt(panel.line);
+  }
+
+  async function newRequest() {
+    if (doc?.kind !== "page") return;
+    const line = editor?.insertRequest();
+    if (line == null) return;
+    await refreshBlocks(text);
+    await openEdit(line);
   }
 
   async function loadPanelHistory() {
@@ -566,6 +665,13 @@
       e.preventDefault();
       if (panel) panel = null;
       else if (blocks[0]) openPanel(blocks[0].key);
+    } else if (k === "e" && doc?.kind === "page" && !e.defaultPrevented) {
+      // Ctrl+E inside a block is handled by the editor; elsewhere open the panel's block or the first one.
+      const line = panel?.line ?? blocks[0]?.line;
+      if (line != null) {
+        e.preventDefault();
+        openEdit(line);
+      }
     }
   }
 
@@ -591,7 +697,8 @@
     const keys = blocks.map((b) => b.key);
     const map = new Map(shown);
     const run = new Set(running);
-    editor?.setResponses({ keys, shown: map, running: run });
+    const folded = new Set(collapsed);
+    editor?.setResponses({ keys, shown: map, running: run, collapsed: folded });
   });
 
   onMount(() => {
@@ -646,6 +753,14 @@
           {title}{#if dirty}<span class="dot" title="Unsaved changes">●</span>{/if}
         </div>
         <div class="tools">
+          {#if doc?.kind === "page"}
+            <button class="quiet-btn" onclick={newRequest} title="Add a request block below the cursor">+ Request</button>
+          {/if}
+          {#if doc?.kind === "page" && shown.size}
+            <button class="quiet-btn" onclick={() => foldAll(!allFolded)} title="Fold or unfold every response on this page">
+              {allFolded ? "Show responses" : "Hide responses"}
+            </button>
+          {/if}
           {#if doc?.kind === "page" && blocks.length}
             {#if running.size}
               <button class="quiet-btn" onclick={cancel} title="Esc">Stop</button>
@@ -686,7 +801,12 @@
           {onChange}
           variableNames={() => varNames}
           transformPaste={pasteCurl}
-          handlers={{ run: (line) => runAt(line), open: (key) => openPanel(key) }}
+          handlers={{
+            run: (line) => runAt(line),
+            open: (key) => openPanel(key),
+            edit: (line) => openEdit(line),
+            toggle: toggleFold,
+          }}
         />
       </section>
       {#if !doc}
@@ -709,7 +829,14 @@
             onPin={pin}
             onCurl={copyCurl}
             onPickHistory={showHistory}
-            onSend={(t) => panelSocket && api.wsSend(panelSocket.conn, t).catch((e) => notify(errorText(e), true))}
+            onSendMessage={(t) => panelSocket && api.wsSend(panelSocket.conn, t).catch((e) => notify(errorText(e), true))}
+            bind:tab={panelTab}
+            bind:formFocused
+            form={panelForm}
+            {formError}
+            running={running.has(panel.key)}
+            {onFormChange}
+            onSend={sendFromForm}
             onDisconnect={() => panelSocket && api.wsClose(panelSocket.conn)}
             onReconnect={() => {
               const b = blocks.find((b) => b.key === panel!.key);

@@ -175,6 +175,8 @@ export const api = {
     invoke<void>("ws_connect", { conn, id, text, line, env }),
   wsSend: (conn: number, text: string) => invoke<void>("ws_send", { conn, text }),
   wsClose: (conn: number) => invoke<void>("ws_close", { conn }),
+  blockForm: (text: string, line: number) => invoke<RequestForm>("block_form", { text, line }),
+  formToBlock: (form: RequestForm) => invoke<string>("form_to_block", { form }),
   startupPath: () => invoke<string | null>("startup_path"),
   logUi: (level: string, message: string) => invoke<void>("log_ui", { level, message }).catch(() => {}),
 };
@@ -240,4 +242,38 @@ export function statusClass(s: Shown | undefined): "ok" | "warn" | "err" | "none
   if (s.status >= 400) return "err";
   if (s.status >= 300) return "warn";
   return "ok";
+}
+
+export interface Pair {
+  key: string;
+  value: string;
+}
+
+export type Auth =
+  | { type: "none" }
+  | { type: "bearer"; token: string }
+  | { type: "basic"; username: string; password: string }
+  | { type: "apikey"; header: string; value: string }
+  | { type: "oauth2"; profile: string };
+
+export type BodyMode = "none" | "json" | "text" | "form" | "graphql";
+
+/** Mirrors reqowl_core::form::RequestForm. */
+export interface RequestForm {
+  kind: "http" | "graphql" | "websocket";
+  method: string;
+  url: string;
+  params: Pair[];
+  headers: Pair[];
+  auth: Auth;
+  body_mode: BodyMode;
+  body: string;
+  form: Pair[];
+  variables: string;
+  name: string;
+  timeout: string;
+  no_redirect: boolean;
+  insecure: boolean;
+  other: Pair[];
+  comments: string[];
 }

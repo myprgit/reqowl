@@ -26,11 +26,17 @@ export interface Overlay {
   keys: string[];
   shown: Map<string, Shown>;
   running: Set<string>;
+  /** Responses folded down to their status line. */
+  collapsed: Set<string>;
 }
 
 export interface HttpBlockHandlers {
   run(fenceLine: number): void;
   open(key: string): void;
+  /** Open the block in the form editor. */
+  edit(fenceLine: number): void;
+  /** Fold or unfold a response. */
+  toggle(key: string): void;
 }
 
 export const setOverlay = StateEffect.define<Overlay>();
@@ -78,7 +84,7 @@ export const blocksField = StateField.define<Block[]>({
 });
 
 const overlayField = StateField.define<Overlay>({
-  create: () => ({ keys: [], shown: new Map(), running: new Set() }),
+  create: () => ({ keys: [], shown: new Map(), running: new Set(), collapsed: new Set() }),
   update(value, tr) {
     for (const e of tr.effects) if (e.is(setOverlay)) value = e.value;
     return value;
@@ -90,23 +96,44 @@ class ResponseWidget extends WidgetType {
     readonly key: string,
     readonly shown: Shown | undefined,
     readonly running: boolean,
+    readonly collapsed: boolean,
     readonly handlers: HttpBlockHandlers,
   ) {
     super();
   }
 
   eq(other: ResponseWidget) {
-    return other.key === this.key && other.shown === this.shown && other.running === this.running;
+    return (
+      other.key === this.key &&
+      other.shown === this.shown &&
+      other.running === this.running &&
+      other.collapsed === this.collapsed
+    );
   }
 
   toDOM() {
     const s = this.shown;
     const wrap = document.createElement("div");
-    wrap.className = `cm-resp cm-resp-${this.running ? "running" : statusClass(s)}${s?.stale ? " cm-resp-stale" : ""}`;
+    wrap.className =
+      `cm-resp cm-resp-${this.running ? "running" : statusClass(s)}` +
+      (s?.stale ? " cm-resp-stale" : "") +
+      (this.collapsed ? " cm-resp-collapsed" : "");
     wrap.title = "Open in the response panel";
 
     const head = document.createElement("div");
     head.className = "cm-resp-head";
+    if (!this.running) {
+      const fold = document.createElement("span");
+      fold.className = "cm-resp-fold";
+      fold.textContent = this.collapsed ? "▸" : "▾";
+      fold.title = this.collapsed ? "Show the response" : "Fold the response";
+      fold.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.handlers.toggle(this.key);
+      });
+      head.appendChild(fold);
+    }
     const add = (cls: string, text: string) => {
       const el = document.createElement("span");
       el.className = cls;
@@ -128,7 +155,7 @@ class ResponseWidget extends WidgetType {
     }
     wrap.appendChild(head);
 
-    if (s && !this.running && !s.error) {
+    if (s && !this.running && !s.error && !this.collapsed) {
       if (s.image) {
         const img = document.createElement("img");
         img.src = s.image;
@@ -165,7 +192,7 @@ class ResponseWidget extends WidgetType {
 }
 
 function decorate(state: EditorState, handlers: HttpBlockHandlers): DecorationSet {
-  const { keys, shown, running } = state.field(overlayField);
+  const { keys, shown, running, collapsed } = state.field(overlayField);
   const ranges: Range<Decoration>[] = [];
   for (const b of state.field(blocksField)) {
     for (let n = b.fenceLine; n <= b.lastLine; n++) {
@@ -175,17 +202,50 @@ function decorate(state: EditorState, handlers: HttpBlockHandlers): DecorationSe
       if (n === b.lastLine) cls += " cm-http-close";
       ranges.push(Decoration.line({ class: cls }).range(line.from));
     }
+    const fence = state.doc.line(b.fenceLine + 1);
+    ranges.push(Decoration.widget({ widget: new FormLink(b.fenceLine, handlers), side: 1 }).range(fence.to));
     const key = keys[b.index];
     const s = key ? shown.get(key) : undefined;
     const isRunning = key ? running.has(key) : false;
     if (s || isRunning) {
       const end = state.doc.line(b.lastLine + 1).to;
       ranges.push(
-        Decoration.widget({ widget: new ResponseWidget(key, s, isRunning, handlers), block: true, side: 1 }).range(end),
+        Decoration.widget({
+          widget: new ResponseWidget(key, s, isRunning, collapsed.has(key), handlers),
+          block: true,
+          side: 1,
+        }).range(end),
       );
     }
   }
   return Decoration.set(ranges, true);
+}
+
+/** "Edit as form" link at the end of a block's opening fence line. */
+class FormLink extends WidgetType {
+  constructor(
+    readonly fenceLine: number,
+    readonly handlers: HttpBlockHandlers,
+  ) {
+    super();
+  }
+  eq(other: FormLink) {
+    return other.fenceLine === this.fenceLine;
+  }
+  toDOM() {
+    const el = document.createElement("span");
+    el.className = "cm-form-link";
+    el.textContent = "form";
+    el.title = "Edit as a form (Ctrl+E)";
+    el.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      this.handlers.edit(this.fenceLine);
+    });
+    return el;
+  }
+  ignoreEvent() {
+    return true;
+  }
 }
 
 class RunMarker extends GutterMarker {
@@ -206,6 +266,49 @@ class RunMarker extends GutterMarker {
 
 const idleMarker = new RunMarker(false);
 const runningMarker = new RunMarker(true);
+
+/** Adds an empty line at the end of the document and puts the cursor on it. */
+function openLineAtEnd(view: EditorView): boolean {
+  const doc = view.state.doc;
+  const last = doc.line(doc.lines);
+  if (last.text.trim() === "") {
+    view.dispatch({ selection: { anchor: doc.length }, scrollIntoView: true });
+  } else {
+    view.dispatch({ changes: { from: doc.length, insert: "\n" }, selection: { anchor: doc.length + 1 }, scrollIntoView: true });
+  }
+  return true;
+}
+
+/**
+ * A page that ends with a block (and its response) leaves nowhere to keep
+ * writing. ArrowDown on the last line and clicks below the text open a new
+ * empty line at the end.
+ */
+const roomBelow: Extension = [
+  Prec.high(
+    keymap.of([
+      {
+        key: "ArrowDown",
+        run(view) {
+          const sel = view.state.selection.main;
+          if (!sel.empty || view.state.doc.lineAt(sel.head).number !== view.state.doc.lines) return false;
+          return openLineAtEnd(view);
+        },
+      },
+    ]),
+  ),
+  EditorView.domEventHandlers({
+    mousedown(event, view) {
+      // The last element in the content is the last line or a trailing response widget.
+      const lastEl = view.contentDOM.lastElementChild as HTMLElement | null;
+      const textBottom = lastEl ? lastEl.getBoundingClientRect().bottom : 0;
+      if (event.button !== 0 || event.clientY <= textBottom) return false;
+      event.preventDefault();
+      view.focus();
+      return openLineAtEnd(view);
+    },
+  }),
+];
 
 export function httpBlocks(handlers: HttpBlockHandlers): Extension {
   const decoField = StateField.define<DecorationSet>({
@@ -252,7 +355,16 @@ export function httpBlocks(handlers: HttpBlockHandlers): Extension {
         return true;
       },
     },
+    {
+      key: "Mod-e",
+      run(view) {
+        const b = blockAt(view.state, view.state.selection.main.head);
+        if (!b) return false;
+        handlers.edit(b.fenceLine);
+        return true;
+      },
+    },
   ]));
 
-  return [blocksField, overlayField, decoField, runGutter, runKeys];
+  return [blocksField, overlayField, decoField, runGutter, runKeys, roomBelow];
 }

@@ -722,6 +722,24 @@ fn watch(app: AppHandle, root: &Path) -> Option<Debouncer<RecommendedWatcher>> {
     Some(deb)
 }
 
+/// The form view of the block whose opening fence is on `line`.
+#[tauri::command]
+fn block_form(text: String, line: usize) -> Res<reqowl_core::form::RequestForm> {
+    let parsed = page::parse(&text);
+    let b = parsed
+        .blocks
+        .iter()
+        .find(|b| fence_line(b) == line)
+        .ok_or("there's no http block on that line")?;
+    reqowl_core::form::from_block(&b.content).map_err(s)
+}
+
+/// Block content (between the fences) for a form.
+#[tauri::command]
+fn form_to_block(form: reqowl_core::form::RequestForm) -> Res<String> {
+    reqowl_core::form::to_block(&form).map_err(s)
+}
+
 /// Frontend errors end up in the terminal that started the app.
 #[tauri::command]
 fn log_ui(level: String, message: String) {
@@ -780,6 +798,8 @@ pub fn run() {
             ws_close,
             startup_path,
             log_ui,
+            block_form,
+            form_to_block,
         ])
         .run(tauri::generate_context!())
         .expect("error while running reqowl");

@@ -30,7 +30,7 @@
 
   let host: HTMLDivElement;
   let view: EditorView | undefined;
-  let lastOverlay: Overlay = { keys: [], shown: new Map(), running: new Set() };
+  let lastOverlay: Overlay = { keys: [], shown: new Map(), running: new Set(), collapsed: new Set() };
 
   onMount(() => {
     view = new EditorView({ parent: host });
@@ -85,6 +85,47 @@
     if (!b) return;
     const end = view.state.doc.line(b.lastLine + 1).to;
     view.dispatch({ changes: { from: end, insert: "\n" + insert }, scrollIntoView: true });
+  }
+
+  /** Range of the text between a block's fences. */
+  function contentRange(fenceLine: number): { from: number; to: number } | null {
+    if (!view) return null;
+    const b = view.state.field(blocksField, false)?.find((b) => b.fenceLine === fenceLine);
+    if (!b) return null;
+    const doc = view.state.doc;
+    const last = doc.line(b.lastLine + 1);
+    const closed = b.lastLine > b.fenceLine && /^\s*(```|~~~)/.test(last.text);
+    const from = b.fenceLine + 2 <= doc.lines ? doc.line(b.fenceLine + 2).from : doc.length;
+    const to = closed ? last.from : doc.length;
+    return { from: Math.min(from, to), to };
+  }
+
+  /** Replaces what's between a block's fences, e.g. after a form edit. */
+  export function replaceBlockContent(fenceLine: number, content: string) {
+    const r = contentRange(fenceLine);
+    if (!view || !r) return;
+    const insert = content.endsWith("\n") ? content : content + "\n";
+    if (view.state.sliceDoc(r.from, r.to) === insert) return;
+    view.dispatch({ changes: { from: r.from, to: r.to, insert } });
+  }
+
+  /** Adds an empty request block below the cursor's line; returns its fence line. */
+  export function insertRequest(): number | null {
+    if (!view) return null;
+    const state = view.state;
+    const inBlock = state.field(blocksField, false)?.find((b) => {
+      const pos = state.selection.main.head;
+      return pos >= b.from && pos <= b.to;
+    });
+    const at = inBlock ? state.doc.line(inBlock.lastLine + 1).to : state.doc.lineAt(state.selection.main.head).to;
+    const lineText = state.doc.lineAt(at).text;
+    const prefix = lineText.trim() === "" ? "\n" : "\n\n";
+    const insert = `${prefix}\`\`\`http\nGET {{base}}/\n\`\`\`\n`;
+    // Cursor at the end of the URL, ready to type the path.
+    const urlEnd = at + prefix.length + "```http\nGET {{base}}/".length;
+    view.dispatch({ changes: { from: at, insert }, selection: { anchor: urlEnd }, scrollIntoView: true });
+    view.focus();
+    return state.doc.lineAt(at).number - 1 + prefix.length;
   }
 
   export function revealLine(line: number) {
@@ -198,6 +239,24 @@
     border-radius: 6px;
   }
 
+  .editor :global(.cm-form-link) {
+    float: right;
+    margin-right: 6px;
+    font-family: var(--font-ui);
+    font-variation-settings: normal;
+    font-size: 11.5px;
+    color: var(--ink-faint);
+    cursor: pointer;
+    padding: 0 6px;
+    border-radius: 4px;
+    user-select: none;
+  }
+
+  .editor :global(.cm-form-link:hover) {
+    color: var(--ink);
+    background: var(--amber-wash);
+  }
+
   .editor :global(.cm-resp) {
     margin: 4px 12px 10px 28px;
     border-left: 3px solid var(--ink-faint);
@@ -238,6 +297,25 @@
     align-items: baseline;
     white-space: nowrap;
     overflow: hidden;
+  }
+
+  .editor :global(.cm-resp-fold) {
+    width: 16px;
+    margin-left: -4px;
+    color: var(--ink-faint);
+    text-align: center;
+    border-radius: 4px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .editor :global(.cm-resp-fold:hover) {
+    color: var(--ink);
+    background: var(--amber-wash);
+  }
+
+  .editor :global(.cm-resp-collapsed) {
+    padding-bottom: 4px;
   }
 
   .editor :global(.cm-resp-status) {
