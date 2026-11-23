@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/reqowl-core", "crates/reqowl-cli"]
+members = ["crates/reqowl-core", "crates/reqowl-cli", "src-tauri"]
 
 [workspace.package]
 version = "0.1.0"

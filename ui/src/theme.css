@@ -1,0 +1,137 @@
+/* reqowl: a ruled notebook. Brand colours come from the mascot:
+   cream paper, navy ink, amber pencil. The one loud element is the amber
+   margin line where the run markers sit; everything else stays quiet. */
+
+:root {
+  --paper: #f5efe0;
+  --paper-side: #ece3cd;
+  --paper-raised: #fbf7ec;
+  --rule: #e2d8c0;
+  --rule-strong: #cdbf9f;
+  --ink: #1f2a44;
+  --ink-soft: #56607a;
+  --ink-faint: #8a8f9c;
+  --amber: #e8a33d;
+  --amber-ink: #8a5a12;
+  --amber-wash: #f6e2b8;
+  --ok: #2f6b45;
+  --ok-wash: #dcead9;
+  --warn: #8a5a12;
+  --err: #a63a28;
+  --err-wash: #f4dcd3;
+  --select: #f3d9a3;
+  --code-bg: #efe6d1;
+
+  --font-ui: "Atkinson Hyperlegible Next Variable", system-ui, sans-serif;
+  --font-note: "Recursive Variable", ui-monospace, monospace;
+  --font-code: "Recursive Variable", ui-monospace, monospace;
+  /* Recursive axes: notes are written in the casual, handwritten cut;
+     requests and responses in the strict mono cut. */
+  --note-axes: "MONO" 0.5, "CASL" 1, "slnt" 0, "CRSV" 0.5;
+  --code-axes: "MONO" 1, "CASL" 0, "slnt" 0, "CRSV" 0;
+
+  --line: 26px;
+  --margin-x: 56px;
+
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --paper: #1b2337;
+  --paper-side: #161d2e;
+  --paper-raised: #222b42;
+  --rule: #273150;
+  --rule-strong: #34406a;
+  --ink: #f0e8d6;
+  --ink-soft: #b5b0a3;
+  --ink-faint: #7f8296;
+  --amber: #e8a33d;
+  --amber-ink: #f0b85e;
+  --amber-wash: #3a3424;
+  --ok: #8cc79c;
+  --ok-wash: #1f3a31;
+  --warn: #f0b85e;
+  --err: #ef8f7a;
+  --err-wash: #43272a;
+  --select: #4a4023;
+  --code-bg: #20293f;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font: 14px/1.45 var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--select);
+}
+
+.quiet-btn {
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 6px;
+  padding: 3px 9px;
+  color: var(--ink-soft);
+}
+
+.quiet-btn:hover {
+  background: var(--paper-raised);
+  border-color: var(--rule);
+  color: var(--ink);
+}
+
+.ink-btn {
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: 6px;
+  padding: 4px 12px;
+}
+
+.ink-btn:hover {
+  background: color-mix(in srgb, var(--ink) 88%, var(--amber));
+}
+
+.kbd {
+  font: 11px var(--font-code);
+  font-variation-settings: var(--code-axes);
+  color: var(--ink-faint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

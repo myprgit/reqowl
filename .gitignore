@@ -4,3 +4,5 @@ node_modules/
 .reqowl/
 *.local.toml
 .claude/
+/dist
+/src-tauri/gen
