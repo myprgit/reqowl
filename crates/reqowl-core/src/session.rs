@@ -86,6 +86,47 @@ impl Session {
     }
 }
 
+/// Names used as `{{name.response...}}` in a block.
+pub fn referenced_names(content: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut rest = content;
+    while let Some(start) = rest.find("{{") {
+        let after = &rest[start + 2..];
+        let Some(end) = after.find("}}") else { break };
+        if let Some((name, _)) = after[..end].trim().split_once(".response.")
+            && !out.iter().any(|n| n == name)
+        {
+            out.push(name.to_string());
+        }
+        rest = &after[end + 2..];
+    }
+    out
+}
+
+/// The blocks to run, in order, so that `targets` have every response they
+/// reference: named dependencies first (recursively), then the targets.
+/// Each block appears once. Unknown names are left for resolution to report.
+pub fn with_dependencies<'p>(page: &'p Page, targets: &[&'p Block]) -> Vec<&'p Block> {
+    fn visit<'p>(page: &'p Page, b: &'p Block, out: &mut Vec<&'p Block>, stack: &mut Vec<usize>) {
+        if out.iter().any(|o| o.index == b.index) || stack.contains(&b.index) {
+            return;
+        }
+        stack.push(b.index);
+        for name in referenced_names(&b.content) {
+            if let Some(dep) = find_block(page, &name) {
+                visit(page, dep, out, stack);
+            }
+        }
+        stack.pop();
+        out.push(b);
+    }
+    let mut out = Vec::new();
+    for t in targets {
+        visit(page, t, &mut out, &mut Vec::new());
+    }
+    out
+}
+
 /// Finds a block by `@name` or by 1-based position.
 pub fn find_block<'p>(page: &'p Page, key: &str) -> Option<&'p Block> {
     if let Ok(n) = key.parse::<usize>() {
@@ -94,4 +135,28 @@ pub fn find_block<'p>(page: &'p Page, key: &str) -> Option<&'p Block> {
     page.blocks
         .iter()
         .find(|b| request::parse(&b.content, b.content_line).is_ok_and(|s| s.name() == Some(key)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::page;
+
+    #[test]
+    fn dependencies_come_first() {
+        let p = page::parse(
+            "```http\n# @name a\nGET http://h/a\n```\n\
+             ```http\n# @name b\nGET http://h/{{a.response.body.$.x}}\n```\n\
+             ```http\nGET http://h/{{b.response.status}}/{{a.response.status}}/{{zz.response.status}}\n```\n\
+             ```http\n# @name loop\nGET http://h/{{loop.response.status}}\n```\n",
+        );
+        let order = |keys: &[&str]| -> Vec<usize> {
+            let t: Vec<&Block> = keys.iter().map(|k| find_block(&p, k).unwrap()).collect();
+            with_dependencies(&p, &t).iter().map(|b| b.index + 1).collect()
+        };
+        assert_eq!(order(&["3"]), [1, 2, 3]);
+        assert_eq!(order(&["b", "a"]), [1, 2]);
+        assert_eq!(order(&["loop"]), [4]);
+        assert_eq!(referenced_names("{{a.response.x}} {{ a.response.y }} {{c}}"), ["a"]);
+    }
 }

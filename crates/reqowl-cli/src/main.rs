@@ -6,7 +6,7 @@ use clap::{Parser, Subcommand};
 use reqowl_core::exec::Response;
 use reqowl_core::page::{self, Block};
 use reqowl_core::request;
-use reqowl_core::session::{Session, find_block};
+use reqowl_core::session::{Session, find_block, with_dependencies};
 
 /// reqowl: run the HTTP blocks of a notebook page.
 #[derive(Parser)]
@@ -24,7 +24,8 @@ enum Cmd {
         /// Environment from `env/<name>.toml` (default: the workspace's default_env).
         #[arg(short, long)]
         env: Option<String>,
-        /// Run only these blocks, by @name or 1-based position. Repeatable.
+        /// Run only these blocks (by @name or 1-based position), plus the named
+        /// blocks whose responses they use. Repeatable.
         #[arg(short, long)]
         block: Vec<String>,
         /// Print response headers too.
@@ -110,10 +111,12 @@ async fn run(cli: Cli) -> Result<bool> {
             let blocks: Vec<&Block> = if block.is_empty() {
                 page.blocks.iter().collect()
             } else {
-                block
+                let targets: Vec<&Block> = block
                     .iter()
                     .map(|k| find_block(&page, k).with_context(|| format!("no block `{k}` in {}", path.display())))
-                    .collect::<Result<_>>()?
+                    .collect::<Result<_>>()?;
+                // Blocks whose responses the targets reference run first.
+                with_dependencies(&page, &targets)
             };
             if blocks.is_empty() {
                 anyhow::bail!("{} has no ```http blocks", path.display());
