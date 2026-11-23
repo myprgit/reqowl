@@ -180,6 +180,18 @@
     }
   }
 
+  /** Back to the start screen; the next launch opens it too. */
+  async function closeWorkspace() {
+    await flushSave();
+    doc = null;
+    text = savedText = "";
+    panel = null;
+    shown.clear();
+    sockets = [];
+    ws = null;
+    localStorage.removeItem("reqowl.last");
+  }
+
   async function refreshTree() {
     if (!ws) return;
     try {
@@ -792,7 +804,11 @@
       onTrash={trashPage}
       onCreateEnv={createEnvAsk}
       onImport={pickAndImport}
-      onSwitch={pickAndOpen}
+      {recent}
+      onOpenNotebook={pickAndOpen}
+      onCreateNotebook={pickAndCreate}
+      onOpenRecent={openWorkspace}
+      onCloseNotebook={closeWorkspace}
     />
     <div class="split-x" role="separator" aria-orientation="vertical" onpointerdown={(e) => dragSplit(e, "sidebar")}></div>
     <main>

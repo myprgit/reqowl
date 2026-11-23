@@ -39,7 +39,9 @@ reqowl-app ~/notes/my-api        # or open it from the app menu
 ## Using the app
 
 Open a folder as a notebook, create one, or import a Postman or Insomnia
-export from the start screen. Pages save as you type.
+export from the start screen. Later, click the notebook's name at the top of
+the sidebar to switch to another one, create or import a new one, or close
+it. The app reopens the last notebook on start. Pages save as you type.
 
 ### Writing requests
 

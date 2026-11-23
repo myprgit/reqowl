@@ -15,12 +15,22 @@
     onTrash: (id: string) => void;
     onCreateEnv: () => void;
     onImport: () => void;
-    onSwitch: () => void;
+    onOpenNotebook: () => void;
+    onCreateNotebook: () => void;
+    onOpenRecent: (path: string) => void;
+    onCloseNotebook: () => void;
+    recent: string[];
   }
   let p: Props = $props();
 
   let menu = $state<{ id: string; x: number; y: number } | null>(null);
   let renaming = $state<string | null>(null);
+  let bookMenu = $state(false);
+  const otherRecent = $derived(p.recent.filter((r) => r !== p.ws.root).slice(0, 5));
+
+  function folderName(path: string) {
+    return path.split(/[\\/]/).filter(Boolean).pop() ?? path;
+  }
   let dropRoot = $state(false);
 
   const currentId = $derived(p.current?.kind === "page" ? p.current.id : null);
@@ -39,13 +49,43 @@
   }
 </script>
 
-<svelte:window onclick={() => (menu = null)} />
+<svelte:window
+  onclick={() => {
+    menu = null;
+    bookMenu = false;
+  }}
+/>
 
 <aside>
-  <button class="book" onclick={p.onSwitch} title="{p.ws.root}&#10;Click to open another notebook">
+  <button
+    class="book"
+    aria-haspopup="menu"
+    aria-expanded={bookMenu}
+    title={p.ws.root}
+    onclick={(e) => {
+      e.stopPropagation();
+      bookMenu = !bookMenu;
+    }}
+  >
     <img src="/owl.png" alt="" width="26" height="26" />
     <span>{p.ws.name}</span>
+    <span class="caret">▾</span>
   </button>
+  {#if bookMenu}
+    <div class="menu book-menu" role="menu">
+      <button role="menuitem" onclick={p.onOpenNotebook}>Open notebook…</button>
+      <button role="menuitem" onclick={p.onCreateNotebook}>Create notebook…</button>
+      <button role="menuitem" onclick={p.onImport}>Import Postman or Insomnia…</button>
+      {#if otherRecent.length}
+        <div class="sep" role="separator"></div>
+        {#each otherRecent as r (r)}
+          <button role="menuitem" title={r} onclick={() => p.onOpenRecent(r)}>{folderName(r)}<small>{r}</small></button>
+        {/each}
+      {/if}
+      <div class="sep" role="separator"></div>
+      <button role="menuitem" onclick={p.onCloseNotebook}>Close notebook</button>
+    </div>
+  {/if}
 
   <nav
     class="tree"
@@ -109,6 +149,7 @@
 
 <style>
   aside {
+    position: relative;
     background: var(--paper-side);
     display: flex;
     flex-direction: column;
@@ -130,6 +171,34 @@
     font-variation-settings: "MONO" 0, "CASL" 1, "slnt" 0, "CRSV" 1;
     font-weight: 700;
     font-size: 15px;
+  }
+
+  .book .caret {
+    margin-left: auto;
+    color: var(--ink-faint);
+    font-size: 11px;
+  }
+
+  .book-menu {
+    position: absolute;
+    top: 46px;
+    left: 8px;
+    width: calc(var(--sidebar-w) + 40px);
+    max-width: 340px;
+  }
+
+  .book-menu small {
+    display: block;
+    color: var(--ink-faint);
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sep {
+    border-top: 1px solid var(--rule);
+    margin: 4px 0;
   }
 
   .book span {
