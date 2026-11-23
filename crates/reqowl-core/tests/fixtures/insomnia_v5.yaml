@@ -1,0 +1,214 @@
+type: collection.insomnia.rest/5.0
+schema_version: "5.1"
+name: Insomnia Airlines
+meta:
+  id: wrk_aab4a6a7a3d1409cac2a6e5a8a1ddc7d
+  created: 1778266774011
+  modified: 1778266774011
+  description: "Flights and bookings for Insomnia Airlines."
+collection:
+  - name: airports
+    meta:
+      id: fld_0e5467398ea849d1af43767632f55ddc
+      created: 1778267676045
+      modified: 1778273505588
+      sortKey: -1778267676045
+      description: Airports served by Insomnia Airlines.
+    children:
+      - url: "{{ _.base_url }}/airports"
+        name: List airports.
+        meta:
+          id: req_ec678ccaa5b34b47a2ef5128ee88e845
+          created: 1778267676045
+          modified: 1778273484219
+          isPrivate: false
+          description: Returns the airports served by Insomnia Airlines, optionally
+            filtered by country.
+          sortKey: -1778267676045
+        method: GET
+        parameters:
+          - name: country
+            value: string
+            disabled: true
+          - name: limit
+            value: "2"
+            disabled: false
+        scripts:
+          afterResponse: |-
+            insomnia.test('Status is 200', () => {
+              insomnia.expect(insomnia.response.status).to.eql(200);
+            });
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/airports/:iataCode"
+        name: Update an airport.
+        meta:
+          id: req_aad8cc9c3e5f41e2bc2b635b21e86929
+          created: 1778267676046
+          modified: 1778267676046
+          isPrivate: false
+          description: Replaces the stored details for an airport.
+          sortKey: -1778267676046
+        method: PUT
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "iataCode": "YUL",
+              "name": "Montréal–Trudeau International Airport",
+              "city": "Montréal"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+            disabled: false
+        pathParameters:
+          - name: iataCode
+            value: YUL
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: "off"
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+    authentication:
+      type: apikey
+      key: X-Api-Key
+      value: "{{ _.api_key }}"
+      addTo: header
+      disabled: false
+  - name: grandparent
+    meta:
+      id: fld_87b0432032bf4237977594affb1976fb
+      created: 1779816124318
+      modified: 1779816364828
+      sortKey: -1779816124318
+      description: ""
+    children:
+      - name: parent
+        meta:
+          id: fld_416a8cde60014e13808286c925cda903
+          created: 1779816141613
+          modified: 1779816391323
+          sortKey: -1779816141613
+          description: ""
+        children:
+          - url: https://insomnia-airlines-api.onrender.com/test/extra-data
+            name: Child Request
+            meta:
+              id: req_70759093fbcf498996c1da257b8e6f8b
+              created: 1779816145656
+              modified: 1779816330205
+              isPrivate: false
+              description: ""
+              sortKey: -1779816145656
+            method: GET
+            headers:
+              - name: User-Agent
+                value: insomnia/12.5.1-alpha.0
+                description: ""
+                disabled: false
+              - name: x-test-value
+                value: "{{ _['test-value'] }}"
+                description: ""
+                disabled: false
+            authentication:
+              type: basic
+              useISO88591: false
+              username: "{{ _['test-value'] }}"
+              password: ""
+              disabled: false
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+    environment:
+      test-value: grandparent
+  - url: "{{ _.base_url }}/bookings"
+    name: Create booking
+    meta:
+      id: req_b1c2d3e4f5a64b7c8d9e0f1a2b3c4d5e
+      created: 1778267676100
+      modified: 1778267676100
+      isPrivate: false
+      description: ""
+      sortKey: -1778267676000
+    method: POST
+    body:
+      mimeType: application/json
+      text: |-
+        {
+          "flight": "IA101",
+          "passenger": "{{ _.passenger }}"
+        }
+    headers:
+      - name: Content-Type
+        value: application/json
+    scripts:
+      preRequest: |-
+        insomnia.environment.set('passenger', 'Ada Lovelace');
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+cookieJar:
+  name: Default Jar
+  meta:
+    id: jar_4886ac6900e625c33f800075dc17c4aec7c508d6
+    created: 1779816112609
+    modified: 1779816112609
+environments:
+  name: Base Environment
+  meta:
+    id: env_89cd5087041dfdbd9c564a8d9fb03a789ef5abd5
+    created: 1778266774013
+    modified: 1778513252317
+    isPrivate: false
+  data:
+    base_url: https://insomnia-airlines-api.onrender.com
+    test-value: collection
+  subEnvironments:
+    - name: Staging
+      meta:
+        id: env_ce01ec4776894c65bdac6257f386682e
+        created: 1779815070437
+        modified: 1779815572862
+        isPrivate: false
+        sortKey: 1779815070437
+      data:
+        base_url: https://staging.insomnia-airlines.example.com
+        api_key: staging-key
+      color: "#ca2121"
+    - name: Personal
+      meta:
+        id: env_9a8b7c6d5e4f4a3b2c1d0e9f8a7b6c5d
+        created: 1779815070500
+        modified: 1779815572900
+        isPrivate: true
+        sortKey: 1779815070500
+      data:
+        api_key: my-own-key
+headers:
+  - name: X-Client
+    value: reqowl-test
+authentication:
+  type: bearer
+  token: "{{ _.token }}"
+  prefix: ""
+  disabled: false
