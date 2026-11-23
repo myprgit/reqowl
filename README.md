@@ -16,6 +16,8 @@ diff cleanly in git. Runs on Linux, macOS and Windows.
 - **Secrets stay out of git** in `env/*.local.toml`, and are hidden in history.
 - **HTTP, GraphQL, WebSocket, OAuth2** (client credentials, authorization code with PKCE, password).
 - **Import** Postman collections and environments, Insomnia exports (v4 JSON, v5 YAML), and curl commands. Paste a curl command into a page and it becomes a block.
+- **Form or code.** Edit any request as a form (params, headers, auth, body) or as text; both stay in sync.
+- **Themes.** Six built-in themes, your choice of fonts and text size, and your own themes as small TOML files.
 - **A CLI** that runs the same pages, for scripts and CI.
 
 > Status: early. Everything above works; expect rough edges. See
@@ -32,8 +34,16 @@ diff cleanly in git. Runs on Linux, macOS and Windows.
 | Go to page | `Ctrl+P` |
 | New page | `Ctrl+N` |
 | Rename a page | double-click it, or `F2` |
+| Edit the block under the cursor as a form | `Ctrl+E`, or the block's "form" link |
+| Add a request | "+ Request" in the top bar |
+| Settings (theme, fonts, size) | `Ctrl+,` |
 
-Pages save as you type. Drag pages in the tree to reorder or nest them;
+Pages save as you type. Every request can be edited as a form in the
+panel's Edit tab: method and URL, query params, headers, auth, body (JSON,
+text, form fields or GraphQL) and settings. The form writes the block's
+text as you type, and picks up changes you make to the text. Responses can
+be folded to a single status line with ▾, or all at once with "Hide
+responses". Drag pages in the tree to reorder or nest them;
 right-click for more. Deleted pages go to `.reqowl/trash/` in the notebook.
 The last response of every block comes back when you reopen a page, from the
 run history in `.reqowl/` (git-ignored, 50 runs per block).
@@ -144,6 +154,13 @@ my-api/
 
 Variable lookup order: page front matter, `env/<name>.local.toml`,
 `env/<name>.toml`, `[vars]` in `reqowl.toml`.
+
+## Themes and fonts
+
+Settings (`Ctrl+,`) has six built-in themes (Paper, Ink, Kraft, Graph,
+Blueprint, Night), can follow the system's light/dark mode, and lets you
+pick the fonts for notes and for requests, the text size, and whether the
+page is ruled. To write your own theme, see [docs/themes.md](docs/themes.md).
 
 ## Import
 

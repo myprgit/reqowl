@@ -144,16 +144,16 @@
   }
 
   .item.current {
-    background: var(--amber-wash);
-    box-shadow: inset 3px 0 0 var(--amber);
+    background: var(--accent-wash);
+    box-shadow: inset 3px 0 0 var(--accent);
   }
 
   .item.drop-before {
-    border-top-color: var(--amber);
+    border-top-color: var(--accent);
   }
 
   .item.drop-inside {
-    outline: 1px dashed var(--amber);
+    outline: 1px dashed var(--accent);
   }
 
   .twisty {
@@ -187,7 +187,7 @@
     flex: 1;
     min-width: 0;
     font-size: 13px;
-    border: 1px solid var(--amber);
+    border: 1px solid var(--accent);
     border-radius: 4px;
     background: var(--paper);
     padding: 1px 4px;

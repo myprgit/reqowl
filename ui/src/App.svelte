@@ -22,6 +22,17 @@
   import Panel, { type Tab } from "./components/Panel.svelte";
   import Welcome from "./components/Welcome.svelte";
   import QuickOpen from "./components/QuickOpen.svelte";
+  import SettingsDialog from "./components/Settings.svelte";
+  import {
+    BUILTIN_THEMES,
+    applyAppearance,
+    customThemes,
+    loadSettings,
+    resolveTheme,
+    saveSettings,
+    type Settings,
+    type Theme,
+  } from "./lib/themes";
 
   type Doc = { kind: "page"; id: string } | { kind: "text"; rel: string };
 
@@ -30,7 +41,13 @@
   let text = $state("");
   let savedText = $state("");
   let env = $state<string | null>(null);
-  let theme = $state<"light" | "dark">("light");
+  let settings = $state<Settings>(loadSettings());
+  let customThemeList = $state<Theme[]>([]);
+  let themeErrors = $state<string[]>([]);
+  let themesDir = $state<string | null>(null);
+  let settingsOpen = $state(false);
+  let systemDark = $state(window.matchMedia("(prefers-color-scheme: dark)").matches);
+  const allThemes = $derived([...BUILTIN_THEMES, ...customThemeList]);
   let blocks = $state<BlockInfo[]>([]);
   let varNames: string[] = [];
   const shown = new SvelteMap<string, Shown>();
@@ -98,10 +115,36 @@
 
   // ---- theme ------------------------------------------------------------
 
-  function applyTheme(t: "light" | "dark") {
-    theme = t;
-    document.documentElement.dataset.theme = t;
-    localStorage.setItem("reqowl.theme", t);
+  // Colours and fonts follow the settings, the chosen theme and the system mode.
+  $effect(() => {
+    applyAppearance(settings, resolveTheme(settings, allThemes, systemDark));
+    // Wait for the new styles (and any newly used font) before measuring.
+    requestAnimationFrame(() => editor?.remeasure());
+    document.fonts?.ready.then(() => editor?.remeasure());
+  });
+
+  function changeSettings(next: Settings) {
+    settings = next;
+    saveSettings(next);
+  }
+
+  async function loadCustomThemes(announce = false) {
+    try {
+      const r = customThemes(await api.listCustomThemes());
+      customThemeList = r.themes;
+      themeErrors = r.errors;
+      if (announce) notify(`${r.themes.length} custom theme${r.themes.length === 1 ? "" : "s"} loaded`);
+    } catch (e) {
+      themeErrors = [errorText(e)];
+    }
+  }
+
+  async function openThemesFolder() {
+    try {
+      themesDir = await api.openThemesFolder();
+    } catch (e) {
+      notify(errorText(e), true);
+    }
   }
 
   // ---- workspace ----------------------------------------------------------
@@ -647,7 +690,10 @@
     if (e.key === "Escape" && quickOpen) quickOpen = false;
     if (!mod) return;
     const k = e.key.toLowerCase();
-    if (k === "s") {
+    if (k === ",") {
+      e.preventDefault();
+      settingsOpen = true;
+    } else if (k === "s") {
       e.preventDefault();
       save();
     } else if (k === "p" || k === "k") {
@@ -702,8 +748,10 @@
   });
 
   onMount(() => {
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    applyTheme((localStorage.getItem("reqowl.theme") as "light" | "dark") ?? (prefersDark ? "dark" : "light"));
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const onScheme = () => (systemDark = media.matches);
+    media.addEventListener("change", onScheme);
+    loadCustomThemes();
     api
       .startupPath()
       .catch(() => null)
@@ -777,12 +825,8 @@
               {/each}
             </select>
           </label>
-          <button
-            class="quiet-btn"
-            onclick={() => applyTheme(theme === "light" ? "dark" : "light")}
-            title="Switch to {theme === 'light' ? 'dark' : 'light'} theme"
-          >
-            {theme === "light" ? "Dark" : "Light"}
+          <button class="quiet-btn" onclick={() => (settingsOpen = true)} title="Theme, fonts and text size (Ctrl+,)">
+            Settings
           </button>
         </div>
       </header>
@@ -890,6 +934,19 @@
   </form>
 {/if}
 
+{#if settingsOpen}
+  <SettingsDialog
+    {settings}
+    themes={allThemes}
+    errors={themeErrors}
+    {themesDir}
+    onchange={changeSettings}
+    onOpenFolder={openThemesFolder}
+    onReload={() => loadCustomThemes(true)}
+    onClose={() => (settingsOpen = false)}
+  />
+{/if}
+
 {#if toast}
   <div class="toast" class:error={toast.error} role="status">{toast.text}</div>
 {/if}
@@ -908,7 +965,7 @@
 
   .split-x:hover,
   .split-y:hover {
-    background: var(--amber);
+    background: var(--accent);
   }
 
   main {
@@ -939,7 +996,7 @@
   }
 
   .dot {
-    color: var(--amber);
+    color: var(--accent);
     margin-left: 6px;
     font-size: 10px;
     vertical-align: middle;
@@ -981,8 +1038,8 @@
     align-items: center;
     gap: 10px;
     padding: 6px 18px;
-    background: var(--amber-wash);
-    border-bottom: 1px solid var(--amber);
+    background: var(--accent-wash);
+    border-bottom: 1px solid var(--accent);
     font-size: 13px;
   }
 

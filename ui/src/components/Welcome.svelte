@@ -43,7 +43,7 @@
     display: grid;
     place-items: center;
     overflow: auto;
-    background-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), var(--rule) calc(var(--line) - 1px));
+    background-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), var(--ruled) calc(var(--line) - 1px));
     background-size: 100% var(--line);
   }
 
@@ -65,7 +65,7 @@
     bottom: 0;
     left: 40px;
     width: 6px;
-    background: linear-gradient(to right, var(--amber) 0 2px, transparent 2px 5px, var(--amber) 5px 6px);
+    background: linear-gradient(to right, var(--accent) 0 2px, transparent 2px 5px, var(--accent) 5px 6px);
   }
 
   img {
@@ -133,7 +133,7 @@
   }
 
   li button:hover {
-    color: var(--amber-ink);
+    color: var(--accent-ink);
     text-decoration: underline;
   }
 </style>

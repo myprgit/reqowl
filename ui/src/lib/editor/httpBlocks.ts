@@ -183,7 +183,12 @@ class ResponseWidget extends WidgetType {
       e.preventDefault();
       if (!this.running) this.handlers.open(this.key);
     });
-    return wrap;
+    // Spacing lives in the outer element's padding: CodeMirror doesn't
+    // measure margins on block widgets, which would shift the gutter.
+    const outer = document.createElement("div");
+    outer.className = "cm-resp-outer";
+    outer.appendChild(wrap);
+    return outer;
   }
 
   ignoreEvent() {

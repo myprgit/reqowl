@@ -34,6 +34,7 @@
 
   onMount(() => {
     view = new EditorView({ parent: host });
+    document.fonts?.ready.then(() => remeasure());
   });
   onDestroy(() => view?.destroy());
 
@@ -63,6 +64,14 @@
   export function setResponses(o: Overlay) {
     lastOverlay = o;
     if (view && view.state.field(blocksField, false)) view.dispatch({ effects: setOverlay.of(o) });
+  }
+
+  /** Re-measures line heights after fonts or sizes change outside the editor. */
+  export function remeasure() {
+    if (!view) return;
+    // A no-op transaction makes CodeMirror re-read the DOM, including the gutter.
+    view.requestMeasure();
+    view.dispatch({});
   }
 
   export function focus() {
@@ -146,7 +155,7 @@
 
   /* Ruled paper: one rule under each text line, scrolling with the text. */
   .editor :global(.cm-scroller) {
-    background-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), var(--rule) calc(var(--line) - 1px));
+    background-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), var(--ruled) calc(var(--line) - 1px));
     background-size: 100% var(--line);
     background-position: 0 28px;
     background-attachment: local;
@@ -157,9 +166,9 @@
     width: var(--margin-x);
     background: linear-gradient(
       to left,
-      var(--amber) 0 2px,
+      var(--accent) 0 2px,
       transparent 2px 5px,
-      var(--amber) 5px 6px,
+      var(--accent) 5px 6px,
       transparent 6px
     );
   }
@@ -174,7 +183,7 @@
     width: 30px;
     margin-right: 12px;
     text-align: center;
-    color: var(--amber-ink);
+    color: var(--accent-ink);
     font-size: 13px;
     cursor: pointer;
     border-radius: 5px;
@@ -182,7 +191,7 @@
   }
 
   .editor :global(.cm-run-marker:hover) {
-    background: var(--amber);
+    background: var(--accent);
     color: var(--ink);
   }
 
@@ -198,7 +207,6 @@
 
   .editor :global(.cm-h) {
     font-family: var(--font-note);
-    font-variation-settings: "MONO" 0, "CASL" 1, "slnt" 0, "CRSV" 1;
     letter-spacing: -0.01em;
   }
 
@@ -209,15 +217,16 @@
   }
 
   .editor :global(.cm-var) {
-    color: var(--amber-ink);
-    background: color-mix(in srgb, var(--amber-wash) 70%, transparent);
+    color: var(--accent-ink);
+    background: color-mix(in srgb, var(--accent-wash) 70%, transparent);
     border-radius: 3px;
   }
 
   /* An http block reads like an index card clipped onto the page. */
   .editor :global(.cm-line.cm-http) {
+    font-family: var(--font-code);
     font-variation-settings: var(--code-axes);
-    font-size: 13.5px;
+    font-size: var(--code-size);
     background: var(--paper-raised);
     border-left: 1px solid var(--rule-strong);
     border-right: 1px solid var(--rule-strong);
@@ -254,11 +263,14 @@
 
   .editor :global(.cm-form-link:hover) {
     color: var(--ink);
-    background: var(--amber-wash);
+    background: var(--accent-wash);
+  }
+
+  .editor :global(.cm-resp-outer) {
+    padding: 4px 12px 10px 28px;
   }
 
   .editor :global(.cm-resp) {
-    margin: 4px 12px 10px 28px;
     border-left: 3px solid var(--ink-faint);
     background: var(--paper);
     padding: 4px 0 6px 12px;
@@ -283,7 +295,7 @@
     border-left-color: var(--err);
   }
   .editor :global(.cm-resp-running) {
-    border-left-color: var(--amber);
+    border-left-color: var(--accent);
     border-left-style: dashed;
   }
 
@@ -311,7 +323,7 @@
 
   .editor :global(.cm-resp-fold:hover) {
     color: var(--ink);
-    background: var(--amber-wash);
+    background: var(--accent-wash);
   }
 
   .editor :global(.cm-resp-collapsed) {
@@ -350,7 +362,7 @@
   }
 
   .editor :global(.cm-resp-more) {
-    color: var(--amber-ink);
+    color: var(--accent-ink);
     margin-top: 2px;
   }
 

@@ -1,5 +1,6 @@
 // Typed wrappers around the Tauri commands in src-tauri/src/lib.rs.
 import { invoke } from "@tauri-apps/api/core";
+import type { CustomThemeFile } from "./themes";
 
 export interface TreeNode {
   id: string;
@@ -177,6 +178,8 @@ export const api = {
   wsClose: (conn: number) => invoke<void>("ws_close", { conn }),
   blockForm: (text: string, line: number) => invoke<RequestForm>("block_form", { text, line }),
   formToBlock: (form: RequestForm) => invoke<string>("form_to_block", { form }),
+  listCustomThemes: () => invoke<CustomThemeFile[]>("list_custom_themes"),
+  openThemesFolder: () => invoke<string>("open_themes_folder"),
   startupPath: () => invoke<string | null>("startup_path"),
   logUi: (level: string, message: string) => invoke<void>("log_ui", { level, message }).catch(() => {}),
 };

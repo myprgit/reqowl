@@ -94,7 +94,7 @@
   input:focus {
     outline: none;
     background: var(--paper-raised);
-    box-shadow: inset 0 -2px 0 var(--amber);
+    box-shadow: inset 0 -2px 0 var(--accent);
   }
 
   .ghost input::placeholder {

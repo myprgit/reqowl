@@ -111,7 +111,7 @@
   }
 
   button.on {
-    background: var(--amber-wash);
+    background: var(--accent-wash);
   }
 
   .path {

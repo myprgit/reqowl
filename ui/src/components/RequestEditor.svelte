@@ -237,7 +237,7 @@
     font-family: var(--font-code);
     font-variation-settings: var(--code-axes);
     font-weight: 800;
-    color: var(--amber-ink);
+    color: var(--accent-ink);
     border: 1px solid var(--rule-strong);
     border-radius: 6px;
     background: var(--paper-raised);
@@ -261,7 +261,7 @@
   textarea:focus,
   select:focus {
     outline: none;
-    border-color: var(--amber);
+    border-color: var(--accent);
   }
 
   .send {
@@ -291,7 +291,7 @@
 
   .sections button.on {
     color: var(--ink);
-    border-bottom-color: var(--amber);
+    border-bottom-color: var(--accent);
   }
 
   .n {
@@ -368,9 +368,9 @@
   }
 
   .modes button.on {
-    background: var(--amber-wash);
+    background: var(--accent-wash);
     color: var(--ink);
-    border-color: var(--amber);
+    border-color: var(--accent);
   }
 
   .modes .fmt {

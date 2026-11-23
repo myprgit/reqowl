@@ -1,0 +1,36 @@
+# A reqowl theme. Copy this file to a new name without the leading
+# underscore (e.g. forest.toml), edit it, then press "Reload themes" in
+# Settings. Files starting with "_" are ignored.
+#
+# Every colour is optional: anything left out comes from the built-in
+# light theme (or dark, if dark = true). Values are any CSS colour.
+
+name = "Forest"
+dark = true
+
+[colors]
+paper = "#16201b"          # page background
+paper-side = "#111915"     # sidebar and panels
+paper-raised = "#1c2822"   # request blocks, inputs, menus
+rule = "#223029"           # ruled lines
+rule-strong = "#2f4238"    # borders
+ink = "#e7efe6"            # text
+ink-soft = "#a9b8ad"       # secondary text
+ink-faint = "#6f8277"      # hints, timestamps
+accent = "#9ad17c"         # margin line, focus, highlights
+accent-ink = "#b5e39b"     # accent used as text ({{variables}}, methods)
+accent-wash = "#26362a"    # selected rows, variable background
+ok = "#9ad17c"             # 2xx status
+ok-wash = "#1e3324"
+warn = "#e3c26b"           # 3xx status
+err = "#f08f7e"            # errors, 4xx/5xx status
+err-wash = "#3b2424"
+select = "#2e4333"         # text selection
+code-bg = "#1a251f"        # inline `code`
+
+# Optional fonts, as CSS font-family lists. The font has to be installed.
+# Settings → Fonts can still override these.
+[fonts]
+# note = "\"IBM Plex Sans\", sans-serif"
+# code = "\"JetBrains Mono\", monospace"
+# ui = "system-ui, sans-serif"

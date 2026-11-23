@@ -53,13 +53,13 @@ const highlight = HighlightStyle.define([
   { tag: t.processingInstruction, color: "var(--ink-faint)" },
   { tag: t.quote, color: "var(--ink-soft)", fontStyle: "italic" },
   { tag: [t.comment, t.contentSeparator], color: "var(--ink-faint)" },
-  { tag: t.meta, color: "var(--amber-ink)", fontWeight: "700" },
-  { tag: t.keyword, color: "var(--amber-ink)", fontWeight: "700" },
-  { tag: [t.atom, t.bool, t.null], color: "var(--amber-ink)" },
+  { tag: t.meta, color: "var(--accent-ink)", fontWeight: "700" },
+  { tag: t.keyword, color: "var(--accent-ink)", fontWeight: "700" },
+  { tag: [t.atom, t.bool, t.null], color: "var(--accent-ink)" },
   { tag: t.number, color: "var(--ok)" },
   { tag: t.string, color: "var(--ink)" },
   { tag: [t.propertyName, t.attributeName, t.atom], color: "var(--ink-soft)", fontWeight: "600" },
-  { tag: t.variableName, color: "var(--amber-ink)" },
+  { tag: t.variableName, color: "var(--accent-ink)" },
   { tag: t.invalid, color: "var(--err)" },
 ]);
 
@@ -108,7 +108,7 @@ const baseTheme = EditorView.theme({
   ".cm-scroller": {
     fontFamily: "var(--font-note)",
     fontVariationSettings: "var(--note-axes)",
-    fontSize: "15px",
+    fontSize: "var(--note-size)",
     lineHeight: "var(--line)",
     overflow: "auto",
   },
@@ -116,14 +116,14 @@ const baseTheme = EditorView.theme({
   ".cm-line": { padding: "0 28px 0 18px" },
   "&.cm-focused .cm-cursor": { borderLeftColor: "var(--ink)", borderLeftWidth: "2px" },
   "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": { backgroundColor: "var(--select) !important" },
-  ".cm-activeLine": { backgroundColor: "color-mix(in srgb, var(--amber-wash) 35%, transparent)" },
+  ".cm-activeLine": { backgroundColor: "color-mix(in srgb, var(--accent-wash) 35%, transparent)" },
   ".cm-gutters": { backgroundColor: "transparent", border: "none" },
   ".cm-placeholder": { color: "var(--ink-faint)" },
   ".cm-tooltip": { backgroundColor: "var(--paper-raised)", border: "1px solid var(--rule-strong)", color: "var(--ink)" },
-  ".cm-tooltip-autocomplete > ul > li[aria-selected]": { backgroundColor: "var(--amber-wash)", color: "var(--ink)" },
+  ".cm-tooltip-autocomplete > ul > li[aria-selected]": { backgroundColor: "var(--accent-wash)", color: "var(--ink)" },
   ".cm-panels": { backgroundColor: "var(--paper-side)", color: "var(--ink)" },
   ".cm-panels input, .cm-panels button": { fontFamily: "var(--font-ui)" },
-  ".cm-searchMatch": { backgroundColor: "var(--amber-wash)", outline: "1px solid var(--amber)" },
+  ".cm-searchMatch": { backgroundColor: "var(--accent-wash)", outline: "1px solid var(--accent)" },
 });
 
 export interface SetupOptions {
@@ -196,7 +196,7 @@ export function viewerState(doc: string, asJson: boolean): EditorState {
         ".cm-content": { padding: "10px 0" },
         ".cm-line": { padding: "0 14px" },
         ".cm-panels": { backgroundColor: "var(--paper-side)", color: "var(--ink)" },
-        ".cm-searchMatch": { backgroundColor: "var(--amber-wash)" },
+        ".cm-searchMatch": { backgroundColor: "var(--accent-wash)" },
       }),
     ],
   });

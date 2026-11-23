@@ -740,6 +740,80 @@ fn form_to_block(form: reqowl_core::form::RequestForm) -> Res<String> {
     reqowl_core::form::to_block(&form).map_err(s)
 }
 
+#[derive(Serialize, serde::Deserialize)]
+struct ThemeFile {
+    name: Option<String>,
+    dark: Option<bool>,
+    #[serde(default)]
+    colors: std::collections::BTreeMap<String, String>,
+    #[serde(default)]
+    fonts: std::collections::BTreeMap<String, String>,
+}
+
+#[derive(Serialize)]
+struct CustomTheme {
+    file: String,
+    theme: Option<ThemeFile>,
+    error: Option<String>,
+}
+
+fn themes_dir(app: &AppHandle) -> Res<PathBuf> {
+    let dir = app.path().app_config_dir().map_err(s)?.join("themes");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let example = dir.join("_example.toml");
+    if !example.exists() {
+        let _ = std::fs::write(&example, include_str!("../assets/example-theme.toml"));
+    }
+    Ok(dir)
+}
+
+/// Themes from `<config dir>/themes/*.toml`. Files starting with `_` are skipped.
+#[tauri::command]
+fn list_custom_themes(app: AppHandle) -> Res<Vec<CustomTheme>> {
+    let dir = themes_dir(&app)?;
+    let mut out = Vec::new();
+    let mut entries: Vec<_> = std::fs::read_dir(&dir)
+        .map_err(s)?
+        .flatten()
+        .map(|e| e.path())
+        .collect();
+    entries.sort();
+    for path in entries {
+        let Some(file) = path.file_name().and_then(|n| n.to_str()).map(str::to_string) else {
+            continue;
+        };
+        if !file.ends_with(".toml") || file.starts_with('_') || file.starts_with('.') {
+            continue;
+        }
+        let parsed = std::fs::read_to_string(&path)
+            .map_err(|e| e.to_string())
+            .and_then(|t| toml::from_str::<ThemeFile>(&t).map_err(|e| e.to_string()));
+        out.push(match parsed {
+            Ok(theme) => CustomTheme {
+                file,
+                theme: Some(theme),
+                error: None,
+            },
+            Err(e) => CustomTheme {
+                file,
+                theme: None,
+                error: Some(e),
+            },
+        });
+    }
+    Ok(out)
+}
+
+/// Opens the themes folder in the system file manager.
+#[tauri::command]
+fn open_themes_folder(app: AppHandle) -> Res<String> {
+    let dir = themes_dir(&app)?;
+    app.opener()
+        .open_path(dir.display().to_string(), None::<&str>)
+        .map_err(s)?;
+    Ok(dir.display().to_string())
+}
+
 /// Frontend errors end up in the terminal that started the app.
 #[tauri::command]
 fn log_ui(level: String, message: String) {
@@ -800,6 +874,8 @@ pub fn run() {
             log_ui,
             block_form,
             form_to_block,
+            list_custom_themes,
+            open_themes_folder,
         ])
         .run(tauri::generate_context!())
         .expect("error while running reqowl");

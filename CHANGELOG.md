@@ -19,3 +19,8 @@ First usable version.
 - Import from Postman (collections and environments), Insomnia (v4 JSON, v5
   YAML) and curl; paste curl into a page; copy a block as curl.
 - `reqowl` CLI to run pages from scripts and CI.
+- Form editor for requests (params, headers, auth, body, settings), kept in
+  sync with the block text both ways; "+ Request" adds a block from the form.
+- Foldable responses, one by one or for the whole page.
+- Settings: six built-in themes, follow-system light/dark, note and code
+  fonts, text size, ruled lines on/off, and custom themes from TOML files.

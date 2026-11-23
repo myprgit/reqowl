@@ -250,7 +250,7 @@
 
   .method {
     font-weight: 800;
-    color: var(--amber-ink);
+    color: var(--accent-ink);
   }
 
   .url {
@@ -297,7 +297,7 @@
   .tabs button.on {
     background: var(--paper);
     color: var(--ink);
-    box-shadow: inset 0 -2px 0 var(--amber);
+    box-shadow: inset 0 -2px 0 var(--accent);
   }
 
   .actions {
@@ -409,7 +409,7 @@
   }
 
   .hrow.on {
-    background: var(--amber-wash);
+    background: var(--accent-wash);
   }
 
   .hrow .url {
@@ -449,7 +449,7 @@
   }
 
   .msg.sent .dir {
-    color: var(--amber-ink);
+    color: var(--accent-ink);
   }
 
   .msg.received .dir {

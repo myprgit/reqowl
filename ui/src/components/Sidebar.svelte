@@ -150,7 +150,7 @@
   }
 
   .tree.drop {
-    border-color: color-mix(in srgb, var(--amber) 50%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 50%, transparent);
   }
 
   .add {
@@ -208,7 +208,7 @@
   }
 
   .row.active {
-    background: var(--amber-wash);
+    background: var(--accent-wash);
   }
 
   .tag {
@@ -244,7 +244,7 @@
   }
 
   .menu button:hover {
-    background: var(--amber-wash);
+    background: var(--accent-wash);
   }
 
   .menu .danger {
