@@ -353,9 +353,10 @@ async fn token_request(
         Value::String(s) => s.parse().ok(),
         _ => None,
     });
-    let expires_at = expires_in.map(|secs| {
+    // An absurdly large expires_in is treated as "does not expire".
+    let expires_at = expires_in.and_then(|secs| {
         let life = Duration::from_secs(secs);
-        started + life - EXPIRY_MARGIN.min(life / 2)
+        started.checked_add(life - EXPIRY_MARGIN.min(life / 2))
     });
     Ok(Token {
         access_token,
