@@ -1,0 +1,15 @@
+reqowl
+Copyright 2026 Mehmet Yapar
+
+This product is licensed under the Apache License, Version 2.0 (LICENSE).
+
+It bundles the following fonts, each under the SIL Open Font License 1.1:
+
+- Recursive, Copyright 2019 The Recursive Project Authors
+  (github.com/arrowtype/recursive). See licenses/Recursive-OFL.txt.
+- Atkinson Hyperlegible Next, Copyright 2020-2024 The Atkinson Hyperlegible
+  Next Project Authors (github.com/googlefonts/atkinson-hyperlegible-next).
+  See licenses/AtkinsonHyperlegibleNext-OFL.txt.
+
+Other open-source libraries it is built from are listed with their licenses
+in Cargo.lock and package-lock.json.

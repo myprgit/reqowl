@@ -35,6 +35,11 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "resources": {
+      "../NOTICE": "NOTICE",
+      "../licenses/Recursive-OFL.txt": "licenses/Recursive-OFL.txt",
+      "../licenses/AtkinsonHyperlegibleNext-OFL.txt": "licenses/AtkinsonHyperlegibleNext-OFL.txt"
+    }
   }
 }
