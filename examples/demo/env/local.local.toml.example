@@ -1,0 +1,2 @@
+# Copy to local.local.toml (git-ignored) to keep secrets out of the repo.
+password = "hoot"

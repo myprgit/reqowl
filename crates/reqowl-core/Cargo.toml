@@ -1,0 +1,27 @@
+[package]
+name = "reqowl-core"
+description = "Core of reqowl: notebook pages with runnable HTTP blocks"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+pulldown-cmark = { version = "0.13", default-features = false }
+reqwest = { version = "0.13", features = ["gzip", "brotli", "deflate", "zstd"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_json_path = "0.7"
+thiserror = "2"
+tokio = { version = "1", features = ["time"] }
+toml = "1"
+uuid = { version = "1", features = ["v4"] }
+base64 = "0.22"
+rand = "0.9"
+time = { version = "0.3", features = ["formatting"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+wiremock = "0.6"
+tempfile = "3"

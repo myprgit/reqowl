@@ -1,0 +1,5 @@
+name = "reqowl demo"
+default_env = "local"
+
+[vars]
+api = "{{base}}/api"

@@ -1,0 +1,6 @@
+# Start the demo server first: python3 scripts/demo-server.py
+base = "http://127.0.0.1:8787"
+user = "owl"
+# Real projects keep secrets in env/local.local.toml (git-ignored);
+# the demo password is here so the example runs as-is.
+password = "hoot"
