@@ -68,9 +68,19 @@ fn folder(root: &Path, parent: Option<&str>) -> PathBuf {
 pub fn clean_title(title: &str) -> Res<String> {
     let t: String = title
         .chars()
-        .map(|c| if "/\\:*?\"<>|".contains(c) || c.is_control() { '-' } else { c })
+        .map(|c| {
+            if "/\\:*?\"<>|".contains(c) || c.is_control() {
+                '-'
+            } else {
+                c
+            }
+        })
         .collect();
-    let t = t.trim().trim_start_matches('.').trim_end_matches(['.', ' ']).to_string();
+    let t = t
+        .trim()
+        .trim_start_matches('.')
+        .trim_end_matches(['.', ' '])
+        .to_string();
     if t.is_empty() {
         return Err("a page needs a name".into());
     }
@@ -94,7 +104,9 @@ fn scan_dir(root: &Path, parent: Option<&str>) -> Res<Vec<Node>> {
         Err(e) => return Err(io(&dir)(e)),
     };
     for entry in entries.flatten() {
-        let Some(name) = entry.file_name().to_str().map(str::to_string) else { continue };
+        let Some(name) = entry.file_name().to_str().map(str::to_string) else {
+            continue;
+        };
         let is_dir = entry.file_type().is_ok_and(|t| t.is_dir());
         let (title, md) = if is_dir {
             if skip_dir(&name, parent.is_none()) {
@@ -134,15 +146,30 @@ fn scan_dir(root: &Path, parent: Option<&str>) -> Res<Vec<Node>> {
         .into_iter()
         .map(|(title, has_md, has_dir)| {
             let id = join_id(parent, &title);
-            let children = if has_dir { scan_dir(root, Some(&id))? } else { Vec::new() };
-            Ok(Node { id, title, has_page: has_md, children })
+            let children = if has_dir {
+                scan_dir(root, Some(&id))?
+            } else {
+                Vec::new()
+            };
+            Ok(Node {
+                id,
+                title,
+                has_page: has_md,
+                children,
+            })
         })
         .collect()
 }
 
 fn read_order(dir: &Path) -> Vec<String> {
     fs::read_to_string(dir.join(ORDER_FILE))
-        .map(|s| s.lines().map(str::trim).filter(|l| !l.is_empty()).map(str::to_string).collect())
+        .map(|s| {
+            s.lines()
+                .map(str::trim)
+                .filter(|l| !l.is_empty())
+                .map(str::to_string)
+                .collect()
+        })
         .unwrap_or_default()
 }
 
@@ -206,7 +233,11 @@ pub fn rename_page(root: &Path, id: &str, new_title: &str) -> Res<String> {
     if clean == old_title {
         return Ok(id.to_string());
     }
-    let new_title = if clean.eq_ignore_ascii_case(old_title) { clean } else { unique_title(root, parent, &clean) };
+    let new_title = if clean.eq_ignore_ascii_case(old_title) {
+        clean
+    } else {
+        unique_title(root, parent, &clean)
+    };
     let new_id = join_id(parent, &new_title);
     move_files(root, id, &new_id)?;
     let mut order = read_order(&folder(root, parent));
@@ -252,16 +283,20 @@ pub fn move_page(root: &Path, id: &str, new_parent: Option<&str>, before: Option
         move_files(root, id, &new_id)?;
         // Drop it from the old folder's order.
         let mut old = read_order(&folder(root, old_parent));
-        if old.iter().any(|o| *o == title) {
+        if old.contains(&title) {
             old.retain(|o| *o != title);
             write_order(root, old_parent, &old)?;
         }
         new_id
     };
     let moved_title = title_of(&new_id).to_string();
-    let mut order: Vec<String> =
-        child_titles(root, new_parent)?.into_iter().filter(|t| *t != moved_title).collect();
-    let pos = before.and_then(|b| order.iter().position(|t| t == b)).unwrap_or(order.len());
+    let mut order: Vec<String> = child_titles(root, new_parent)?
+        .into_iter()
+        .filter(|t| *t != moved_title)
+        .collect();
+    let pos = before
+        .and_then(|b| order.iter().position(|t| t == b))
+        .unwrap_or(order.len());
     order.insert(pos, moved_title);
     write_order(root, new_parent, &order)?;
     Ok(new_id)
@@ -270,7 +305,9 @@ pub fn move_page(root: &Path, id: &str, new_parent: Option<&str>, before: Option
 /// Moves a page and its children to `.reqowl/trash/<time>/` instead of deleting.
 pub fn trash_page(root: &Path, id: &str) -> Res<PathBuf> {
     check_id(id)?;
-    let stamp = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis());
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis());
     let trash = root.join(STATE_DIR).join("trash").join(stamp.to_string());
     fs::create_dir_all(&trash).map_err(io(&trash))?;
     let title = title_of(id);
@@ -295,7 +332,10 @@ mod tests {
     use super::*;
 
     fn ids(nodes: &[Node]) -> Vec<String> {
-        nodes.iter().flat_map(|n| std::iter::once(n.id.clone()).chain(ids(&n.children))).collect()
+        nodes
+            .iter()
+            .flat_map(|n| std::iter::once(n.id.clone()).chain(ids(&n.children)))
+            .collect()
     }
 
     #[test]
@@ -331,6 +371,9 @@ mod tests {
         assert!(root.join("Shop/Login.md").exists());
 
         trash_page(root, "Shop").unwrap();
-        assert_eq!(ids(&scan(root).unwrap()), ["a-b-c", "Auth", "Auth/Refresh", "Orders (2)"]);
+        assert_eq!(
+            ids(&scan(root).unwrap()),
+            ["a-b-c", "Auth", "Auth/Refresh", "Orders (2)"]
+        );
     }
 }

@@ -29,6 +29,12 @@ pub enum Error {
 
     #[error("{0} requests are not supported yet")]
     Unsupported(&'static str),
+
+    #[error("WebSocket: {0}")]
+    WebSocket(String),
+
+    #[error("OAuth2: {0}")]
+    OAuth(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

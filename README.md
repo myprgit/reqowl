@@ -34,11 +34,64 @@ Request syntax follows VS Code REST Client / JetBrains HTTP Client:
 |---|---|
 | `# @name login` | Later blocks can use `{{login.response.body.$.path}}`, `.status`, `.headers.Name` |
 | `# @auth bearer T` / `basic U P` / `apikey Header V` | Sets the auth header |
+| `# @auth oauth2 api` | Gets a token for the OAuth2 profile `api` (see below) |
 | `# @timeout 10s` | Default 30s |
 | `# @no-redirect`, `# @insecure` | Don't follow redirects / skip TLS checks |
 
 Built-ins: `{{$uuid}}`, `{{$timestamp}}`, `{{$isoTimestamp}}`, `{{$randomInt 1 100}}`.
 `GRAPHQL url` sends the body as a GraphQL query (variables JSON after a blank line).
+
+### WebSocket
+
+````markdown
+```http
+WEBSOCKET wss://{{host}}/socket
+Authorization: Bearer {{token}}
+
+{"subscribe": "orders"}
+===
+{"subscribe": "prices"}
+```
+````
+
+Headers go on the handshake (`@auth` works as usual). The body holds the
+messages to send once the connection opens, separated by lines that are
+exactly `===`. `@timeout` limits the handshake only; `@insecure` accepts any
+certificate. The CLI prints what it sends (`→`) and receives (`←`) for
+`--ws-wait` seconds (default 3), then closes.
+
+### OAuth2
+
+`# @auth oauth2 api` takes its settings from variables named `api.<setting>`,
+so they can differ per environment and secrets can live in the local file.
+Quote the keys: unquoted dotted keys are TOML tables.
+
+```toml
+# env/dev.toml
+"api.grant" = "client_credentials"     # or authorization_code, password
+"api.token_url" = "https://auth.example.com/oauth/token"
+"api.client_id" = "reqowl"
+"api.scope" = "orders:read"
+
+# env/dev.local.toml
+"api.client_secret" = "..."
+```
+
+| Setting | |
+|---|---|
+| `grant` | `client_credentials`, `authorization_code` or `password` |
+| `token_url`, `client_id` | Required |
+| `client_secret`, `scope`, `audience` | Optional; sent in the form body |
+| `auth_url` | Required for `authorization_code` |
+| `username`, `password` | Required for `password` |
+| `redirect_port` | `authorization_code` only; default 0 (any free port) |
+
+`authorization_code` uses PKCE and opens the sign-in page in your browser
+(the CLI prints the URL too); the redirect URI is
+`http://127.0.0.1:<port>/callback`, so register that with the provider, with
+a fixed `redirect_port` if it needs an exact match. Tokens are kept in memory
+until shortly before they expire, then renewed with the refresh token if
+there is one.
 
 ## Workspace
 

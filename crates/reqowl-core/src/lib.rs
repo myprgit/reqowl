@@ -9,9 +9,11 @@ pub mod error;
 pub mod exec;
 pub mod history;
 pub mod mask;
+pub mod oauth;
 pub mod page;
 pub mod request;
 pub mod session;
 pub mod vars;
+pub mod ws;
 
 pub use error::{Error, Result};

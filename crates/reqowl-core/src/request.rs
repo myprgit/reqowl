@@ -122,11 +122,21 @@ impl RequestSpec {
         })
     }
 
+    /// The profile of `@auth oauth2 PROFILE`, if that is the block's auth.
+    /// The session fetches the token; see [`crate::oauth`].
+    pub fn oauth_profile(&self) -> Option<&str> {
+        let auth = self.directives.auth.as_deref()?.trim();
+        let (scheme, rest) = auth.split_once(char::is_whitespace)?;
+        let rest = rest.trim();
+        (scheme.eq_ignore_ascii_case("oauth2") && !rest.is_empty()).then_some(rest)
+    }
+
     /// Turns the `@auth` directive into a header. Call after [`Self::resolve`].
     ///
     /// - `bearer TOKEN`
     /// - `basic USER PASSWORD` (or `basic USER:PASSWORD`)
     /// - `apikey HEADER-NAME VALUE`
+    /// - `oauth2 PROFILE`: left alone here; [`crate::session::Session`] adds the token.
     pub fn apply_auth(&mut self) -> Result<()> {
         let Some(auth) = self.directives.auth.clone() else {
             return Ok(());
@@ -151,10 +161,11 @@ impl RequestSpec {
                 };
                 self.set_header(name, value.trim().to_string());
             }
+            "oauth2" if !rest.is_empty() => {}
             "none" => {}
             _ => {
                 return Err(Error::Variable(format!(
-                    "@auth: expected `bearer TOKEN`, `basic USER PASSWORD` or `apikey HEADER VALUE`, got `{auth}`"
+                    "@auth: expected `bearer TOKEN`, `basic USER PASSWORD`, `apikey HEADER VALUE` or `oauth2 PROFILE`, got `{auth}`"
                 )));
             }
         }
@@ -409,5 +420,15 @@ mod tests {
 
         let mut r = parse("# @auth digest x\nGET http://h", 1).unwrap();
         assert!(r.apply_auth().is_err());
+
+        let mut r = parse("# @auth OAuth2  api \nGET http://h", 1).unwrap();
+        r.apply_auth().unwrap();
+        assert_eq!(r.oauth_profile(), Some("api"));
+        assert!(r.headers.is_empty());
+        assert!(parse("# @auth oauth2\nGET http://h", 1).unwrap().apply_auth().is_err());
+        assert_eq!(
+            parse("# @auth bearer x\nGET http://h", 1).unwrap().oauth_profile(),
+            None
+        );
     }
 }

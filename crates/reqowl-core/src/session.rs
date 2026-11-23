@@ -3,10 +3,12 @@
 //! app both go through this.
 
 use std::path::Path;
+use std::sync::Arc;
 
 use crate::env::{self, Env, Workspace};
 use crate::error::{Error, Result};
 use crate::exec::{Client, Response};
+use crate::oauth::{OAuthState, TokenCache};
 use crate::page::{Block, Page};
 use crate::request::{self, RequestSpec};
 use crate::vars::Context;
@@ -16,6 +18,7 @@ pub struct Session {
     pub env: Option<Env>,
     pub ctx: Context,
     client: Client,
+    oauth: OAuthState,
 }
 
 pub struct Outcome {
@@ -60,7 +63,31 @@ impl Session {
                 ..Default::default()
             },
             client: Client::new(),
+            oauth: OAuthState::default(),
         })
+    }
+
+    /// Called with the sign-in URL when an `@auth oauth2` profile uses the
+    /// authorization code grant. The app opens the system browser; the CLI
+    /// prints the URL.
+    pub fn set_browser_opener(&mut self, open: Box<dyn Fn(&str) + Send + Sync>) {
+        self.oauth.open_browser = Some(open.into());
+    }
+
+    /// Shares OAuth2 tokens with other sessions (one cache per app, say).
+    pub fn set_token_cache(&mut self, cache: Arc<TokenCache>) {
+        self.oauth.cache = cache;
+    }
+
+    pub fn token_cache(&self) -> &Arc<TokenCache> {
+        &self.oauth.cache
+    }
+
+    /// For `@auth oauth2 PROFILE`: gets a token and sets the `Authorization`
+    /// header. Does nothing for other blocks. [`Self::run`] calls this; call
+    /// it yourself after [`Self::prepare`] for WebSocket blocks.
+    pub async fn authorize(&self, spec: &mut RequestSpec) -> Result<()> {
+        self.oauth.authorize(spec, &self.ctx).await
     }
 
     /// Parses and resolves a block without sending it.
@@ -74,7 +101,8 @@ impl Session {
     /// Sends a block. If it has `@name`, its response becomes available to
     /// later blocks as `{{name.response...}}`.
     pub async fn run(&mut self, block: &Block) -> Result<Outcome> {
-        let spec = self.prepare(block)?;
+        let mut spec = self.prepare(block)?;
+        self.authorize(&mut spec).await?;
         let response = self.client.execute(&spec).await?;
         if let Some(name) = spec.name() {
             self.ctx.record(name, response.record());

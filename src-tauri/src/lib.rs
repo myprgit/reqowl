@@ -40,7 +40,9 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 }
 
 fn root(state: &AppState) -> Res<PathBuf> {
-    lock(&state.root).clone().ok_or_else(|| "no notebook is open".to_string())
+    lock(&state.root)
+        .clone()
+        .ok_or_else(|| "no notebook is open".to_string())
 }
 
 fn s<E: std::fmt::Display>(e: E) -> String {
@@ -59,7 +61,8 @@ struct WorkspaceInfo {
 fn info(root: &Path) -> Res<WorkspaceInfo> {
     let ws = Workspace::open(root).map_err(s)?;
     let name = ws.config.name.clone().unwrap_or_else(|| {
-        root.file_name().map_or_else(|| "Notebook".into(), |n| n.to_string_lossy().into_owned())
+        root.file_name()
+            .map_or_else(|| "Notebook".into(), |n| n.to_string_lossy().into_owned())
     });
     Ok(WorkspaceInfo {
         root: root.display().to_string(),
@@ -72,7 +75,9 @@ fn info(root: &Path) -> Res<WorkspaceInfo> {
 
 #[tauri::command]
 fn open_workspace(app: AppHandle, state: State<AppState>, path: String) -> Res<WorkspaceInfo> {
-    let root = PathBuf::from(&path).canonicalize().map_err(|e| format!("{path}: {e}"))?;
+    let root = PathBuf::from(&path)
+        .canonicalize()
+        .map_err(|e| format!("{path}: {e}"))?;
     if !root.join(CONFIG_FILE).is_file() {
         return Err(format!("not_workspace:{}", root.display()));
     }
@@ -91,7 +96,9 @@ fn init_workspace(path: String) -> Res<()> {
     if root.join(CONFIG_FILE).exists() {
         return Ok(());
     }
-    let name = root.file_name().map_or_else(|| "Notebook".into(), |n| n.to_string_lossy().into_owned());
+    let name = root
+        .file_name()
+        .map_or_else(|| "Notebook".into(), |n| n.to_string_lossy().into_owned());
     let w = |rel: &str, text: &str| -> Res<()> {
         let p = root.join(rel);
         if p.exists() {
@@ -102,7 +109,10 @@ fn init_workspace(path: String) -> Res<()> {
         }
         std::fs::write(&p, text).map_err(|e| format!("{}: {e}", p.display()))
     };
-    w(CONFIG_FILE, &format!("name = {name:?}\ndefault_env = \"dev\"\n\n[vars]\n"))?;
+    w(
+        CONFIG_FILE,
+        &format!("name = {name:?}\ndefault_env = \"dev\"\n\n[vars]\n"),
+    )?;
     w(
         "env/dev.toml",
         "# Variables for the dev environment. Use them as {{base}} in requests.\n\
@@ -190,7 +200,11 @@ fn move_history(state: &AppState, from: &str, to: &str) {
         let _ = h.rename_page(&format!("{from}.md"), &format!("{to}.md"));
     }
     let mut r = lock(&state.responses);
-    let moved: Vec<String> = r.keys().filter(|k| *k == from || k.starts_with(&format!("{from}/"))).cloned().collect();
+    let moved: Vec<String> = r
+        .keys()
+        .filter(|k| *k == from || k.starts_with(&format!("{from}/")))
+        .cloned()
+        .collect();
     for k in moved {
         if let Some(v) = r.remove(&k) {
             r.insert(format!("{to}{}", &k[from.len()..]), v);
@@ -291,7 +305,11 @@ fn request_view(spec: &RequestSpec, m: &Masker) -> RequestView {
     RequestView {
         method: spec.method.clone(),
         url: m.mask(&spec.url),
-        headers: spec.headers.iter().map(|h| (h.name.clone(), m.mask(&h.value))).collect(),
+        headers: spec
+            .headers
+            .iter()
+            .map(|h| (h.name.clone(), m.mask(&h.value)))
+            .collect(),
         body: spec.body.as_deref().map(|b| m.mask(b)),
     }
 }
@@ -303,7 +321,10 @@ fn response_view(r: &Response) -> ResponseView {
         .filter(|ct| ct.starts_with("image/") && !r.truncated && r.body.len() <= 16 * 1024 * 1024)
         .map(|ct| {
             let mime = ct.split(';').next().unwrap_or(ct).trim();
-            format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(&r.body))
+            format!(
+                "data:{mime};base64,{}",
+                base64::engine::general_purpose::STANDARD.encode(&r.body)
+            )
         });
     ResponseView {
         status: r.status,
@@ -366,8 +387,14 @@ async fn run_block(
     for b in order {
         let masker = Masker::new(&session.ctx);
         let key = history::block_key(b);
-        let mut result =
-            RunResult { line: fence_line(b), key: key.clone(), history_id: None, request: None, response: None, error: None };
+        let mut result = RunResult {
+            line: fence_line(b),
+            key: key.clone(),
+            history_id: None,
+            request: None,
+            response: None,
+            error: None,
+        };
 
         let spec = match session.prepare(b) {
             Ok(spec) => spec,
@@ -391,16 +418,25 @@ async fn run_block(
             }
             Some(Ok(out)) => {
                 result.history_id = lock(&state.history).as_ref().and_then(|h| {
-                    h.record(&page_rel, &key, env.as_deref(), &out.request, Ok(&out.response), &masker).ok()
+                    h.record(
+                        &page_rel,
+                        &key,
+                        env.as_deref(),
+                        &out.request,
+                        Ok(&out.response),
+                        &masker,
+                    )
+                    .ok()
                 });
                 result.response = Some(response_view(&out.response));
                 false
             }
             Some(Err(e)) => {
                 let msg = masker.mask(&e.to_string());
-                result.history_id = lock(&state.history)
-                    .as_ref()
-                    .and_then(|h| h.record(&page_rel, &key, env.as_deref(), &spec, Err(&msg), &masker).ok());
+                result.history_id = lock(&state.history).as_ref().and_then(|h| {
+                    h.record(&page_rel, &key, env.as_deref(), &spec, Err(&msg), &masker)
+                        .ok()
+                });
                 result.error = Some(msg);
                 true
             }
@@ -440,7 +476,8 @@ fn latest_runs(state: State<AppState>, id: String) -> Res<Vec<Entry>> {
 fn history_list(state: State<AppState>, id: String, key: Option<String>, limit: Option<usize>) -> Res<Vec<Entry>> {
     let h = lock(&state.history);
     let Some(h) = h.as_ref() else { return Ok(Vec::new()) };
-    h.list(&format!("{id}.md"), key.as_deref(), limit.unwrap_or(50)).map_err(s)
+    h.list(&format!("{id}.md"), key.as_deref(), limit.unwrap_or(50))
+        .map_err(s)
 }
 
 /// Copies a block as a curl command, with variables filled in for `env`.
@@ -448,7 +485,11 @@ fn history_list(state: State<AppState>, id: String, key: Option<String>, limit: 
 fn block_as_curl(state: State<AppState>, id: String, text: String, line: usize, env: Option<String>) -> Res<String> {
     let root = root(&state)?;
     let parsed = page::parse(&text);
-    let b = parsed.blocks.iter().find(|b| fence_line(b) == line).ok_or("there's no http block on that line")?;
+    let b = parsed
+        .blocks
+        .iter()
+        .find(|b| fence_line(b) == line)
+        .ok_or("there's no http block on that line")?;
     let mut session = Session::open(&md_path(&root, &id), &parsed, env.as_deref()).map_err(s)?;
     session.ctx.responses = lock(&state.responses).get(&id).cloned().unwrap_or_default();
     let spec = session.prepare(b).map_err(s)?;
@@ -462,7 +503,10 @@ fn shell_quote(s: &str) -> String {
 fn to_curl(spec: &RequestSpec) -> String {
     let mut out = format!("curl -X {} {}", spec.method, shell_quote(&spec.url));
     for h in &spec.headers {
-        out.push_str(&format!(" \\\n  -H {}", shell_quote(&format!("{}: {}", h.name, h.value))));
+        out.push_str(&format!(
+            " \\\n  -H {}",
+            shell_quote(&format!("{}: {}", h.name, h.value))
+        ));
     }
     if let Some(b) = &spec.body {
         out.push_str(&format!(" \\\n  --data-raw {}", shell_quote(b)));
@@ -476,29 +520,32 @@ fn to_curl(spec: &RequestSpec) -> String {
 /// Watches the workspace and tells the UI which pages changed on disk.
 fn watch(app: AppHandle, root: &Path) -> Option<Debouncer<RecommendedWatcher>> {
     let base = root.to_path_buf();
-    let mut deb = new_debouncer(Duration::from_millis(300), move |res: notify_debouncer_mini::DebounceEventResult| {
-        let events = match res {
-            Ok(notify_debouncer_mini::DebouncedEventBatch::Events(events)) => events,
-            // Missed events: tell the UI to reload everything.
-            Ok(notify_debouncer_mini::DebouncedEventBatch::Rescan) => {
-                let _ = app.emit("fs-changed", vec!["*".to_string()]);
-                return;
+    let mut deb = new_debouncer(
+        Duration::from_millis(300),
+        move |res: notify_debouncer_mini::DebounceEventResult| {
+            let events = match res {
+                Ok(notify_debouncer_mini::DebouncedEventBatch::Events(events)) => events,
+                // Missed events: tell the UI to reload everything.
+                Ok(notify_debouncer_mini::DebouncedEventBatch::Rescan) => {
+                    let _ = app.emit("fs-changed", vec!["*".to_string()]);
+                    return;
+                }
+                _ => return,
+            };
+            let mut changed: Vec<String> = events
+                .iter()
+                .filter_map(|e| e.path.strip_prefix(&base).ok().map(Path::to_path_buf))
+                .filter(|p| !p.starts_with(STATE_DIR))
+                .filter(|p| p.extension().is_some_and(|x| x == "md" || x == "toml") || p.ends_with(tree::ORDER_FILE))
+                .map(|p| p.to_string_lossy().replace('\\', "/"))
+                .collect();
+            changed.sort();
+            changed.dedup();
+            if !changed.is_empty() {
+                let _ = app.emit("fs-changed", changed);
             }
-            _ => return,
-        };
-        let mut changed: Vec<String> = events
-            .iter()
-            .filter_map(|e| e.path.strip_prefix(&base).ok().map(Path::to_path_buf))
-            .filter(|p| !p.starts_with(STATE_DIR))
-            .filter(|p| p.extension().is_some_and(|x| x == "md" || x == "toml") || p.ends_with(tree::ORDER_FILE))
-            .map(|p| p.to_string_lossy().replace('\\', "/"))
-            .collect();
-        changed.sort();
-        changed.dedup();
-        if !changed.is_empty() {
-            let _ = app.emit("fs-changed", changed);
-        }
-    })
+        },
+    )
     .ok()?;
     deb.watcher().watch(root, RecursiveMode::Recursive).ok()?;
     Some(deb)
