@@ -234,14 +234,22 @@
     margin-right: 12px;
   }
 
+  /* Top and bottom edges are inset shadows, not borders: a border would add
+     height and push everything below off the ruled lines. */
   .editor :global(.cm-line.cm-http-open) {
-    border-top: 1px solid var(--rule-strong);
+    box-shadow: inset 0 1px 0 var(--rule-strong);
     border-radius: 6px 6px 0 0;
   }
 
   .editor :global(.cm-line.cm-http-close) {
-    border-bottom: 1px solid var(--rule-strong);
+    box-shadow: inset 0 -1px 0 var(--rule-strong);
     border-radius: 0 0 6px 6px;
+  }
+
+  .editor :global(.cm-line.cm-http-open.cm-http-close) {
+    box-shadow:
+      inset 0 1px 0 var(--rule-strong),
+      inset 0 -1px 0 var(--rule-strong);
   }
 
   .editor :global(.cm-line.cm-http-open.cm-http-close) {
@@ -266,19 +274,21 @@
     background: var(--accent-wash);
   }
 
+  /* Everything in a response is sized in whole ruled lines (one line per
+     row, one blank line after), so the text below stays on the rules. */
   .editor :global(.cm-resp-outer) {
-    padding: 4px 12px 10px 28px;
+    padding: 0 12px var(--line) 28px;
   }
 
   .editor :global(.cm-resp) {
     border-left: 3px solid var(--ink-faint);
     background: var(--paper);
-    padding: 4px 0 6px 12px;
+    padding: 0 0 0 12px;
     cursor: pointer;
     font-family: var(--font-code);
     font-variation-settings: var(--code-axes);
     font-size: 12.5px;
-    line-height: 19px;
+    line-height: var(--line);
   }
 
   .editor :global(.cm-resp:hover) {
@@ -326,8 +336,8 @@
     background: var(--accent-wash);
   }
 
-  .editor :global(.cm-resp-collapsed) {
-    padding-bottom: 4px;
+  .editor :global(.cm-resp-head) {
+    height: var(--line);
   }
 
   .editor :global(.cm-resp-status) {
@@ -354,7 +364,7 @@
   }
 
   .editor :global(.cm-resp-body) {
-    margin: 4px 0 0;
+    margin: 0;
     white-space: pre-wrap;
     word-break: break-all;
     color: var(--ink-soft);
@@ -363,14 +373,15 @@
 
   .editor :global(.cm-resp-more) {
     color: var(--accent-ink);
-    margin-top: 2px;
   }
 
   .editor :global(.cm-resp-img) {
     display: block;
     max-width: 320px;
-    max-height: 220px;
-    margin-top: 6px;
+    /* A whole number of lines tall; the image scales to fit inside. */
+    height: calc(var(--line) * 8);
+    object-fit: contain;
+    object-position: left center;
     border: 1px solid var(--rule);
   }
 </style>
